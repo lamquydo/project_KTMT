@@ -1,7 +1,7 @@
 # Tài Liệu 01: Cơ Sở Lý Thuyết Toàn Diện Về Bộ Nhớ Đệm (Cache Memory) & Hệ Thống Phân Cấp Bộ Nhớ
 
 > **Tài liệu chuyên khảo phục vụ Đồ án Kiến trúc Máy tính (KTMT)**  
-> **Đối chiếu chuẩn học thuật**: Giáo trình *Computer Organization and Design: The Hardware/Software Interface* (David A. Patterson & John L. Hennessy – Chương 5: *Large and Fast: Exploiting Memory Hierarchy*, Mục 5.3, 5.4 và 5.5 trong file [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)).
+> **Đối chiếu chuẩn học thuật**: Giáo trình *Computer Organization and Design: The Hardware/Software Interface* (David A. Patterson & John L. Hennessy – Chương 5: *Large and Fast: Exploiting Memory Hierarchy*, Mục 5.3, 5.4 và 5.5 trong file [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)).
 
 ---
 
@@ -10,9 +10,7 @@
 2. [Các Phương pháp Tổ chức & Ánh xạ Bộ nhớ Đệm (Cache Mapping)](#2-các-phương-pháp-tổ-chức--ánh-xạ-bộ-nhớ-đệm-cache-mapping)
 3. [Giải mã Địa chỉ 32-bit & Tính toán Dung lượng Thực tế của Cache](#3-giải-mã-địa-chỉ-32-bit--tính-toán-dung-lượng-thực-tế-của-cache)
 4. [Xử lý Cache Miss, Chính sách Ghi (Write Policies) & Thay thế (LRU)](#4-xử-lý-cache-miss-chính-sách-ghi-write-policies--thay-thế-lru)
-5. [Đo lường và Cải thiện Hiệu năng Cache (Mục 5.4)](#5-đo-lường-và-cải-thiện-hiệu-năng-cache-mục-54)
-6. [Tối ưu hóa Phần mềm thông qua Kỹ thuật Chia khối (Cache Blocking - DGEMM)](#6-tối-ưu-hóa-phần-mềm-thông-qua-kỹ-thuật-chia-khối-cache-blocking---dgemm)
-7. [Độ tin cậy của Hệ thống Bộ nhớ & Mã Sửa lỗi Hamming SEC/DED (Mục 5.5)](#7-độ-tin-cậy-của-hệ-thống-bộ-nhớ--mã-sửa-lỗi-hamming-secded-mục-55)
+5. [Đo lường và Đánh giá Hiệu năng Cache (AMAT)](#5-đo-lường-và-đánh-giá-hiệu-năng-cache-amat)
 
 ---
 
@@ -42,7 +40,7 @@ Cache hoạt động hiệu quả (tỷ lệ đoán trúng thường đạt $> 9
 
 ## 2. Các Phương pháp Tổ chức & Ánh xạ Bộ nhớ Đệm (Cache Mapping)
 
-Khi nạp một khối dữ liệu (Block) từ DRAM lên Cache, câu hỏi cốt lõi là: **Khối dữ liệu đó được phép đặt vào vị trí nào trong Cache?** Có 3 phương pháp ánh xạ kinh điển (Mục 5.3 & 5.4 trong [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)):
+Khi nạp một khối dữ liệu (Block) từ DRAM lên Cache, câu hỏi cốt lõi là: **Khối dữ liệu đó được phép đặt vào vị trí nào trong Cache?** Có 3 phương pháp ánh xạ kinh điển (Mục 5.3 & 5.4 trong [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)):
 
 ```mermaid
 flowchart TD
@@ -71,7 +69,7 @@ flowchart TD
 - Một khối bộ nhớ được ánh xạ cố định vào một Set theo phép chia lấy dư:
   $$\text{Set Index} = (\text{Block Address}) \bmod (\text{Số lượng Sets trong Cache})$$
 - Bên trong Set được chọn, khối dữ liệu có thể nằm ở **bất kỳ Way nào trong $N$ Ways**. Khi tìm kiếm, phần cứng dùng `Set Index` để trỏ tới đúng hàng (Set) trong SRAM, đọc đồng thời $N$ giá trị Tag từ $N$ Ways và dùng **$N$ bộ so sánh (Comparators)** hoạt động song song.
-- Theo số liệu thực nghiệm SPEC CPU2000 trong giáo trình (Hình 5.16, trang 407 [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)), chỉ cần nâng từ **1-Way (Direct-Mapped)** lên **2-Way Set-Associative** đã giúp giảm khoảng **15% tỷ lệ Miss Rate** với chi phí phần cứng tăng thêm rất nhỏ!
+- Theo số liệu thực nghiệm SPEC CPU2000 trong giáo trình (Hình 5.16, trang 407 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)), chỉ cần nâng từ **1-Way (Direct-Mapped)** lên **2-Way Set-Associative** đã giúp giảm khoảng **15% tỷ lệ Miss Rate** với chi phí phần cứng tăng thêm rất nhỏ!
 
 ---
 
@@ -107,7 +105,7 @@ Từ các thông số trên, ta suy ra cấu trúc tổ chức bộ nhớ đệm
 ```
 
 ### 3.2. Công thức Tính Tổng Số Bit Vật lý (Total Physical Bits in Cache)
-Theo quy ước tên gọi kiến trúc máy tính, khi gọi **"4KB Cache"**, con số $4\text{ KB}$ ($32,768\text{ bits}$) chỉ tính phần dung lượng lưu trữ dữ liệu thuần túy (**Data Array**). Trong thực tế phần cứng (xem Mục 5.3 trang 389–390 và Mục 5.4 trang 409 [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)), bộ nhớ Cache còn phải lưu trữ các bit siêu dữ liệu (**Metadata**):
+Theo quy ước tên gọi kiến trúc máy tính, khi gọi **"4KB Cache"**, con số $4\text{ KB}$ ($32,768\text{ bits}$) chỉ tính phần dung lượng lưu trữ dữ liệu thuần túy (**Data Array**). Trong thực tế phần cứng (xem Mục 5.3 trang 389–390 và Mục 5.4 trang 409 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)), bộ nhớ Cache còn phải lưu trữ các bit siêu dữ liệu (**Metadata**):
 - **Valid bit ($1\text{ bit/line}$)**: Cho biết dòng Cache có chứa dữ liệu hợp lệ hay đang trống (khi mới khởi động/Reset, toàn bộ `Valid = 0`).
 - **Dirty bit ($1\text{ bit/line}$)**: Bắt buộc đối với chính sách **Write-Back**, cho biết dữ liệu trong dòng Cache đã bị CPU ghi đè (khác với DRAM) hay chưa.
 - **Tag bits ($21\text{ bits/line}$)**: Lưu trường địa chỉ Tag.
@@ -168,7 +166,7 @@ Khi xảy ra Cache Miss tại một Set `index`, bộ điều khiển phải ch�
 ## 5. Đo lường và Cải thiện Hiệu năng Cache (Mục 5.4)
 
 ### 5.1. Phương trình Thời gian Thực thi CPU có Chu kỳ Chờ Bộ nhớ (CPU Time with Memory Stalls)
-Theo Mục 5.4 (trang 399–401 [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)), thời gian thực thi của CPU được tính bởi:
+Theo Mục 5.4 (trang 399–401 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)), thời gian thực thi của CPU được tính bởi:
 $$\text{CPU Time} = \left(\text{CPU Execution Clock Cycles} + \text{Memory-Stall Clock Cycles}\right) \times \text{Clock Cycle Time}$$
 
 Trong đó:
@@ -179,10 +177,10 @@ Và số chu kỳ trung bình trên mỗi lệnh thực tế ($\text{CPI}_{\text
 $$\text{CPI}_{\text{stall}} = \text{CPI}_{\text{base}} + \text{Memory-Stall Cycles per Instruction}$$
 
 > [!IMPORTANT]
-> **Hệ quả của Định luật Amdahl (Trang 401 [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf))**: Khi cải tiến đường ống (Pipeline) làm giảm $\text{CPI}_{\text{base}}$ (ví dụ từ $2.0$ xuống $1.0$) hoặc tăng tần số xung nhịp CPU mà không cải thiện tốc độ hệ thống bộ nhớ, **tỷ trọng thời gian CPU bị đình trệ vì Cache Miss ($\text{Memory Stall} / \text{Total CPI}$) sẽ tăng vọt** (ví dụ từ $63\%$ lên $77\%$). Do đó, thiết kế Cache quyết định trực tiếp hiệu năng thực tế của vi xử lý!
+> **Hệ quả của Định luật Amdahl (Trang 401 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf))**: Khi cải tiến đường ống (Pipeline) làm giảm $\text{CPI}_{\text{base}}$ (ví dụ từ $2.0$ xuống $1.0$) hoặc tăng tần số xung nhịp CPU mà không cải thiện tốc độ hệ thống bộ nhớ, **tỷ trọng thời gian CPU bị đình trệ vì Cache Miss ($\text{Memory Stall} / \text{Total CPI}$) sẽ tăng vọt** (ví dụ từ $63\%$ lên $77\%$). Do đó, thiết kế Cache quyết định trực tiếp hiệu năng thực tế của vi xử lý!
 
 ### 5.2. Thời gian Truy cập Bộ nhớ Trung bình (AMAT – Average Memory Access Time)
-Để đánh giá toàn diện một thiết kế Cache (xét cả Hit Time, Miss Rate và Miss Penalty), các nhà thiết kế sử dụng đại lượng **AMAT** (Trang 402 [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)):
+Để đánh giá toàn diện một thiết kế Cache (xét cả Hit Time, Miss Rate và Miss Penalty), các nhà thiết kế sử dụng đại lượng **AMAT** (Trang 402 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)):
 $$\text{AMAT} = \text{Time for a Hit} + \text{Miss Rate} \times \text{Miss Penalty}$$
 
 Đối với kiến trúc **Write-Back Cache** như trong đồ án, một lần Miss có thể là **Clean Miss** (nạn nhân sạch, chỉ tốn thời gian Fetch $\text{Penalty}_{\text{clean}}$) hoặc **Dirty Miss** (nạn nhân bẩn, tốn thêm thời gian Write-Back $\text{Penalty}_{\text{wb}}$). Khi đó công thức AMAT tổng quát chính xác là:
@@ -195,65 +193,4 @@ $$\text{AMAT} = \text{Hit Time} + \text{Miss Rate} \times \text{Penalty}_{\text{
 - Với $26$ lần truy cập, có $15$ Hits, $11$ Misses (trong đó có $2$ lần Dirty Write-Back):
   $$\text{AMAT} = 1 + \frac{11}{26} \times 9 + \frac{2}{26} \times 8 = 1 + \frac{99 + 16}{26} = \frac{141}{26} \approx \mathbf{5.42\text{ chu kỳ}} \quad (54.23\text{ ns tại } 100\text{ MHz})$$
 
-### 5.3. Bộ nhớ Đệm Đa mức (Multilevel Caches: L1 & L2 – Mục 5.4, trang 410–411)
-Để vừa giữ **Hit Time** cực nhỏ (bằng cách làm Cache L1 nhỏ gọn, độ kết hợp thấp 2-way/4-way), vừa giảm **Miss Penalty** khi L1 bị trượt, các vi xử lý hiện đại bổ sung thêm **Cache mức 2 (L2 Cache)** lớn hơn nằm trên cùng chip:
-- **Local Miss Rate (Tỷ lệ trượt cục bộ của L2)**: Số lần Miss tại L2 chia cho số lần truy cập vào L2 (chính là số lần Miss của L1).
-- **Global Miss Rate (Tỷ lệ trượt toàn cục)**: Số lần Miss tại L2 chia cho tổng số lần truy cập bộ nhớ của CPU:
-  $$\text{Global Miss Rate} = \text{Miss Rate}_{L1} \times \text{Local Miss Rate}_{L2}$$
-- **Công thức tổng CPI cho hệ thống Cache 2 mức**:
-  $$\text{Total CPI} = \text{CPI}_{\text{base}} + \text{Miss Rate}_{L1} \times \text{Penalty}_{L2} + \text{Global Miss Rate} \times \text{Penalty}_{\text{DRAM}}$$
-- **Triết lý thiết kế**:
-  - **Primary Cache (L1)**: Tối ưu hóa để **giảm Hit Time** (dung lượng nhỏ 4KB–32KB, kích thước dòng nhỏ hơn, độ kết hợp vừa phải) nhằm rút ngắn chu kỳ xung nhịp CPU.
-  - **Secondary Cache (L2/L3)**: Tối ưu hóa để **giảm Miss Rate** (dung lượng lớn 256KB–16MB, kích thước dòng lớn hơn, độ kết hợp cao 8-way/16-way) nhằm tránh phải truy cập xuống DRAM.
 
----
-
-## 6. Tối ưu hóa Phần mềm thông qua Kỹ thuật Chia khối (Cache Blocking - DGEMM)
-
-Trong Mục 5.4 (trang 411–416 [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)), giáo trình chỉ ra rằng: **Phân tích độ phức tạp thuật toán cổ điển $O(N)$ thường bỏ qua tác động của phân cấp bộ nhớ**.
-- **Ví dụ Quicksort vs. Radix Sort (Hình 5.19)**: Dù Radix Sort thực hiện ít lệnh CPU hơn Quicksort trên mỗi phần tử khi mảng lớn, nhưng thời gian chạy thực tế của Radix Sort lại chậm hơn vì mẫu truy cập bộ nhớ phân tán của Radix Sort gây ra quá nhiều **Cache Misses**!
-- **Kỹ thuật Cache Blocking (Loop Tiling) trong nhân ma trận DGEMM ($C = C + A \times B$)**:
-  - Khi nhân hai ma trận lớn kích thước $N \times N$ (không vừa trọn trong Cache): Ma trận $A$ được duyệt theo hàng (tận dụng tốt Spatial Locality), nhưng ma trận $B$ bị duyệt theo cột (nhảy bước $N$ phần tử $\to$ gây **Capacity Miss** liên tục nếu $N$ lớn).
-  - **Giải pháp Chia khối (Blocking)**: Thay vì nhân toàn bộ hàng và cột độ dài $N$, ta chia ma trận thành các **ma trận con (Submatrices / Blocks)** kích thước $\text{BLOCKSIZE} \times \text{BLOCKSIZE}$ sao cho 3 khối con của $A, B, C$ nằm vừa khít trong dung lượng của Cache.
-  - Nhờ đó, dữ liệu của một khối con sau khi nạp vào Cache được tái sử dụng tối đa ($\text{BLOCKSIZE}$ lần) trước khi bị trục xuất, giúp giảm số từ bộ nhớ phải đọc từ DRAM đi một hệ số xấp xỉ $\text{BLOCKSIZE}$ lần!
-  - *Kết quả mô phỏng thực tế trên đúng bộ Cache 4KB 2-Way của đồ án* (chạy bằng [`scripts/cache_architectural_suite.py`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/scripts/cache_architectural_suite.py) với ma trận $32 \times 32$): Kỹ thuật Blocking (`BLOCKSIZE = 8`) giúp **giảm 37.4% số lần Cache Miss** (từ $5,446$ xuống $3,408$ misses) và tăng tốc AMAT lên **1.22 lần**!
-
----
-
-## 7. Độ tin cậy của Hệ thống Bộ nhớ & Mã Sửa lỗi Hamming SEC/DED (Mục 5.5)
-
-Phần cuối của tài liệu tham khảo (Mục 5.5, trang 418–423 [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)) trình bày cách thiết kế hệ thống bộ nhớ đáng tin cậy (**Dependable Memory Hierarchy**) chống lại các lỗi mềm (Soft Errors) do tia vũ trụ hoặc nhiễu điện từ làm lật bit (bit flip) trong các ô nhớ SRAM/DRAM.
-
-### 7.1. Các thước đo Độ tin cậy (Reliability) và Độ sẵn sàng (Availability)
-- **MTTF (Mean Time To Failure)**: Thời gian trung bình giữa các lần xảy ra sự cố (thước đo độ tin cậy – Reliability).
-- **AFR (Annual Failure Rate)**: Tỷ lệ phần trăm thiết bị dự kiến hỏng trong 1 năm ($8,760\text{ giờ}$):
-  $$\text{AFR} = \frac{8760\text{ giờ}}{\text{MTTF (giờ)}}$$
-- **MTTR (Mean Time To Repair)**: Thời gian trung bình để khắc phục/sửa chữa sự cố.
-- **MTBF (Mean Time Between Failures)**: $\text{MTBF} = \text{MTTF} + \text{MTTR}$.
-- **Availability (Độ sẵn sàng)**:
-  $$\text{Availability} = \frac{\text{MTTF}}{\text{MTTF} + \text{MTTR}}$$
-- Ba phương pháp nâng cao MTTF: **Fault Avoidance** (Phòng tránh lỗi bằng cấu trúc), **Fault Tolerance** (Chịu lỗi bằng dự phòng – Redundancy như ECC), và **Fault Forecasting** (Dự báo lỗi).
-
-### 7.2. Khoảng cách Hamming & Mã Sửa 1 Lỗi / Phát hiện 2 Lỗi (Hamming SEC/DED ECC)
-- **Khoảng cách Hamming (Hamming Distance)**: Số lượng vị trí bit khác nhau tối thiểu giữa hai từ mã hợp lệ bất kỳ.
-  - Khoảng cách tối thiểu $d_{\min} = 2$ (ví dụ: thêm **1 bit chẵn lẻ – Parity bit**): Chỉ **phát hiện được lỗi 1 bit (Single Error Detection)** nhưng không biết bit nào sai để sửa, và nếu sai 2 bit thì không phát hiện được.
-  - Khoảng cách tối thiểu $d_{\min} = 3$ (**Mã Hamming SEC – Single Error Correcting**): Sửa được mọi lỗi 1 bit. Để bảo vệ $d$ bit dữ liệu bằng $p$ bit kiểm tra chẵn lẻ, số bit $p$ phải thỏa mãn bất đẳng thức:
-    $$2^p \ge p + d + 1$$
-    *(Ví dụ: Với $d = 8\text{ bits}$ dữ liệu $\to p = 4\text{ bits}$; với $d = 32\text{ bits} \to p = 6\text{ bits}$; với $d = 64\text{ bits} \to p = 7\text{ bits}$)*.
-  - Khoảng cách tối thiểu $d_{\min} = 4$ (**Mã Hamming SEC/DED – Single Error Correcting / Double Error Detecting**): Bổ sung thêm **1 bit chẵn lẻ tổng ($p_{\text{all}}$)** tính trên toàn bộ từ mã SEC. Với $64\text{ bits}$ dữ liệu ($8\text{ Bytes}$), chỉ cần $7 + 1 = 8\text{ bits}$ ($1\text{ Byte}$) ECC, tạo thành đường bus DIMM máy chủ rộng $72\text{ bits}$ tiêu chuẩn!
-
-### 7.3. Quy trình Mã hóa & Giải mã Hamming SEC/DED (Đánh số bit từ 1 bên trái)
-1. **Vị trí các bit**:
-   - Các vị trí là lũy thừa của 2 ($1, 2, 4, 8, 16, \dots$) dành cho các bit kiểm tra chẵn lẻ nhóm ($p_1, p_2, p_4, p_8, \dots$).
-   - Các vị trí còn lại ($3, 5, 6, 7, 9, 10, 11, 12, \dots$) chứa các bit dữ liệu ($d_1, d_2, d_3, d_4, \dots$).
-   - Vị trí cuối cùng chứa bit chẵn lẻ tổng $p_{\text{all}}$.
-2. **Phạm vi kiểm tra (Even Parity)**:
-   - $p_1$ (`0001`₂): Kiểm tra các vị trí có bit trọng số $2^0 = 1$ bằng 1 (vị trí $1, 3, 5, 7, 9, 11, \dots$).
-   - $p_2$ (`0010`₂): Kiểm tra các vị trí có bit trọng số $2^1 = 2$ bằng 1 (vị trí $2, 3, 6, 7, 10, 11, \dots$).
-   - $p_4$ (`0100`₂): Kiểm tra các vị trí có bit trọng số $2^2 = 4$ bằng 1 (vị trí $4, 5, 6, 7, 12, \dots$).
-   - $p_8$ (`1000`₂): Kiểm tra các vị trí có bit trọng số $2^3 = 8$ bằng 1 (vị trí $8, 9, 10, 11, 12, \dots$).
-3. **Giải mã Syndrome ($H = (p_8 p_4 p_2 p_1)_2$) và Kiểm tra Chẵn lẻ tổng ($P_{\text{all}}$)**:
-   - **Trường hợp 1 ($H = 0$ và $P_{\text{all}}$ chẵn)**: Không có lỗi.
-   - **Trường hợp 2 ($H \ne 0$ và $P_{\text{all}}$ lẻ)**: Xảy ra **lỗi đơn 1 bit (Single-Bit Error)** tại đúng vị trí có chỉ số thập phân bằng giá trị nhị phân của $H$ $\to$ Đảo bit tại vị trí $H$ để tự động sửa lỗi!
-   - **Trường hợp 3 ($H = 0$ và $P_{\text{all}}$ lẻ)**: Lỗi 1 bit xảy ra ngay tại chính bit chẵn lẻ tổng $p_{\text{all}}$ (dữ liệu vẫn đúng).
-   - **Trường hợp 4 ($H \ne 0$ và $P_{\text{all}}$ chẵn)**: Phát hiện **lỗi kép 2 bit (Double-Bit Error)** $\to$ Báo hiệu lỗi không thể tự sửa (Uncorrectable Error Exception) để ngăn CPU sử dụng dữ liệu sai!

@@ -1,6 +1,6 @@
 # Tài Liệu 02: Thiết Kế Vi Kiến Trúc Phần Cứng RTL (Verilog) & Máy Trạng Thái Hữu Hạn (FSM)
 
-> **Tài liệu kỹ thuật chuyên sâu giải thích toàn bộ mã nguồn RTL trong thư mục [`rtl/`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl)**  
+> **Tài liệu kỹ thuật chuyên sâu giải thích toàn bộ mã nguồn RTL trong thư mục [`rtl/`](file:///b:/KTMT/project_KTMT/rtl)**  
 > **Đối tượng**: Sinh viên, kỹ sư thiết kế vi mạch số (Digital IC / FPGA Design) và giảng viên chấm đồ án Kiến trúc máy tính.
 
 ---
@@ -16,7 +16,7 @@
 
 ## 1. Kiến trúc Tổng thể Hệ thống (`cache_top.v`)
 
-Bộ nhớ đệm **4KB 2-Way Set-Associative Cache** được thiết kế theo phương pháp phân rã mô-đun rõ ràng giữa **Khối Điều khiển (Control Path)** và **Khối Đường dữ liệu (Datapath)** tại module đỉnh [`rtl/cache_top.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/cache_top.v).
+Bộ nhớ đệm **4KB 2-Way Set-Associative Cache** được thiết kế theo phương pháp phân rã mô-đun rõ ràng giữa **Khối Điều khiển (Control Path)** và **Khối Đường dữ liệu (Datapath)** tại module đỉnh [`rtl/cache_top.v`](file:///b:/KTMT/project_KTMT/rtl/cache_top.v).
 
 ### 1.1. Sơ đồ Khối Vi kiến trúc (Microarchitecture Block Diagram)
 
@@ -62,7 +62,7 @@ flowchart TB
 ```
 
 ### 1.2. Cơ chế Chọn Chỉ số Set (`current_index`) và Chỉ số Word (`current_word_idx`)
-Trong [`rtl/cache_top.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/cache_top.v#L67-L73):
+Trong [`rtl/cache_top.v`](file:///b:/KTMT/project_KTMT/rtl/cache_top.v#L67-L73):
 ```verilog
 wire [INDEX_WIDTH-1:0]    current_index = (state_out == `STATE_IDLE) ? 
                                           cpu_addr[`INDEX_MSB:`INDEX_LSB] : 
@@ -75,7 +75,7 @@ wire [WORD_SEL_WIDTH-1:0] current_word_idx = (state_out == `STATE_IDLE) ?
 - **Ý nghĩa thiết kế**: Ngay khi FSM đã rời khỏi trạng thái `STATE_IDLE` để xử lý yêu cầu (`STATE_COMPARE_TAG`, `STATE_WRITE_BACK`, `STATE_FETCH_MEM`, `STATE_REFILL_UPDATE`), địa chỉ truy cập vào các mảng SRAM được lấy từ **thanh ghi chốt `latched_addr`** bên trong bộ điều khiển. Điều này bảo vệ hoàn toàn quá trình xử lý nhiều chu kỳ của Cache khỏi mọi sự biến thiên trên đường bus `cpu_addr` của CPU trong lúc CPU đang bị dừng (`cpu_ready = 0`).
 
 ### 1.3. Mạch So sánh Tag Song song (Parallel Tag Comparators)
-Đúng theo cấu trúc Hình 5.18 trong giáo trình (trang 408 [`5.3-5.4.pdf`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/5.3-5.4.pdf)), hai bộ so sánh 21-bit hoạt động song song với cổng `AND` kiểm tra bit `valid` tại [`rtl/cache_top.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/cache_top.v#L95-L99):
+Đúng theo cấu trúc Hình 5.18 trong giáo trình (trang 408 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)), hai bộ so sánh 21-bit hoạt động song song với cổng `AND` kiểm tra bit `valid` tại [`rtl/cache_top.v`](file:///b:/KTMT/project_KTMT/rtl/cache_top.v#L95-L99):
 ```verilog
 wire [TAG_WIDTH-1:0] req_tag = latched_addr[`TAG_MSB:`TAG_LSB];
 wire hit0 = valid0 && (tag0 == req_tag);
@@ -89,10 +89,10 @@ wire hit_way = hit1; // 0 nếu trúng Way 0, 1 nếu trúng Way 1
 
 ## 2. Phân tích Chi tiết các Khối Lưu trữ & Logic Phụ trợ
 
-### 2.1. Khối Tham số Toàn cục ([`rtl/cache_defines.vh`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/cache_defines.vh))
+### 2.1. Khối Tham số Toàn cục ([`rtl/cache_defines.vh`](file:///b:/KTMT/project_KTMT/rtl/cache_defines.vh))
 Tập trung toàn bộ các hằng số kiến trúc (`ADDR_WIDTH = 32`, `DATA_WIDTH = 32`, `LINE_WIDTH = 128`, `NUM_SETS = 128`, `TAG_WIDTH = 21`, `INDEX_WIDTH = 7`, `WORD_SEL_WIDTH = 2`) và mã hóa 5 trạng thái FSM. Nhờ thiết kế tham số hóa (`parameter`), việc mở rộng dung lượng Cache (ví dụ lên 8KB hoặc 16KB) chỉ cần thay đổi file header này.
 
-### 2.2. Khối Mảng Thẻ Địa chỉ ([`rtl/tag_array.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/tag_array.v))
+### 2.2. Khối Mảng Thẻ Địa chỉ ([`rtl/tag_array.v`](file:///b:/KTMT/project_KTMT/rtl/tag_array.v))
 Mỗi thực thể `tag_array` đại diện cho 1 Way (chứa 128 dòng):
 - **Ba mảng thanh ghi**: `tag_mem[0:127]` (21-bit), `valid_mem[0:127]` (1-bit), `dirty_mem[0:127]` (1-bit).
 - **Cơ chế Ghi đồng bộ (`posedge clk`)**:
@@ -102,7 +102,7 @@ Mỗi thực thể `tag_array` đại diện cho 1 Way (chứa 128 dòng):
 - **Cơ chế Đọc tổ hợp (Asynchronous/Combinational Read)**:
   - `assign tag_out = tag_mem[index];` cho phép kiểm tra Tag ngay trong chu kỳ `STATE_COMPARE_TAG` mà không bị trễ thêm 1 chu kỳ đọc SRAM.
 
-### 2.3. Khối Mảng Dữ liệu ([`rtl/data_array.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/data_array.v))
+### 2.3. Khối Mảng Dữ liệu ([`rtl/data_array.v`](file:///b:/KTMT/project_KTMT/rtl/data_array.v))
 Mỗi thực thể `data_array` lưu trữ $128\text{ Sets} \times 128\text{ bits} = 2\text{ KB}$ dữ liệu (2 Way cộng lại đúng bằng **4 KB**):
 - **Hai chế độ Ghi đồng bộ**:
   1. **Ghi toàn dòng 128-bit (`line_we == 1`)**: Dùng khi nạp dòng mới từ DRAM (`data_mem[index] <= line_in`).
@@ -111,7 +111,7 @@ Mỗi thực thể `data_array` lưu trữ $128\text{ Sets} \times 128\text{ bit
   1. `line_out[127:0]`: Xuất toàn bộ dòng 128-bit để phục vụ ghi trả (**Write-Back**) xuống DRAM khi dòng bẩn bị trục xuất.
   2. `word_out[31:0]`: Qua bộ chọn kênh 4-sang-1 điều khiển bởi `word_idx[1:0]` để trả đúng Word 32-bit mà CPU cần đọc.
 
-### 2.4. Khối Logic Thay thế LRU ([`rtl/lru_logic.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/lru_logic.v))
+### 2.4. Khối Logic Thay thế LRU ([`rtl/lru_logic.v`](file:///b:/KTMT/project_KTMT/rtl/lru_logic.v))
 - Duy trì mảng 128 bit `lru_mem[0:127]`.
 - **Logic chọn đường nạn nhân (`victim_way`)**:
   ```verilog
@@ -134,7 +134,7 @@ Mỗi thực thể `data_array` lưu trữ $128\text{ Sets} \times 128\text{ bit
 
 ## 3. Thiết kế Máy Trạng Thái Hữu Hạn 5 Trạng thái (`cache_controller.v`)
 
-Bộ điều khiển trung tâm [`rtl/cache_controller.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/cache_controller.v) điều phối mọi hoạt động của Cache thông qua một **FSM gồm 5 trạng thái**:
+Bộ điều khiển trung tâm [`rtl/cache_controller.v`](file:///b:/KTMT/project_KTMT/rtl/cache_controller.v) điều phối mọi hoạt động của Cache thông qua một **FSM gồm 5 trạng thái**:
 
 ### 3.1. Lưu đồ Chuyển Trạng thái FSM (State Transition Diagram)
 
@@ -211,7 +211,7 @@ stateDiagram-v2
 
 ## 4. Phân tích Định thời Chuẩn xác Từng Chu kỳ (Cycle-by-Cycle Timing Analysis)
 
-Với mô hình DRAM có `LATENCY_CYCLES = 6` trong [`sim/main_memory_model.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/sim/main_memory_model.v):
+Với mô hình DRAM có `LATENCY_CYCLES = 6` trong [`sim/main_memory_model.v`](file:///b:/KTMT/project_KTMT/sim/main_memory_model.v):
 - Mỗi giao dịch bộ nhớ DRAM (`STATE_WRITE_BACK` hoặc `STATE_FETCH_MEM`) mất:
   - `1 chu kỳ` để DRAM nhận `mem_req` và bật `busy <= 1, latency_counter <= 1`.
   - `5 chu kỳ` đếm `latency_counter` từ `2` lên `6`.
@@ -242,7 +242,7 @@ Trong quá trình rà soát và hoàn thiện đồ án ở cấp độ chuyên 
   - Khi hai lệnh Miss xảy ra liên tiếp (như ở Kịch bản 5), giao dịch tiếp theo đâm ngang vào giữa chu kỳ đếm của giao dịch ảo trước đó, làm độ trễ bị sai lệch thất thường (lần Dirty Miss đầu mất 17 chu kỳ, lần Dirty Miss thứ hai chỉ mất 12 chu kỳ!).
 
 ### 5.2. Giải pháp Kỹ thuật Chuẩn Công nghiệp Đã Áp dụng
-1. **Tại Bộ điều khiển Cache ([`rtl/cache_controller.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/rtl/cache_controller.v#L238-L250))**:
+1. **Tại Bộ điều khiển Cache ([`rtl/cache_controller.v`](file:///b:/KTMT/project_KTMT/rtl/cache_controller.v#L238-L250))**:
    Hạ ngay tín hiệu yêu cầu `mem_req` xuống `0` ngay khi nhận được xung phản hồi `mem_ready = 1`:
    ```verilog
    `STATE_WRITE_BACK: begin
@@ -258,6 +258,6 @@ Trong quá trình rà soát và hoàn thiện đồ án ở cấp độ chuyên 
        mem_addr  = {latched_addr[ADDR_WIDTH-1:`BLOCK_OFFSET_WIDTH], 4'b0000};
    end
    ```
-2. **Tại Mô hình Bộ nhớ DRAM ([`sim/main_memory_model.v`](file:///c:/Users/LAM%20QUY%20DO/Downloads/project_KTMT/sim/main_memory_model.v#L64-L70))**:
+2. **Tại Mô hình Bộ nhớ DRAM ([`sim/main_memory_model.v`](file:///b:/KTMT/project_KTMT/sim/main_memory_model.v#L64-L70))**:
    Bổ sung điều kiện khóa liên động `if (mem_req && !mem_ready)` khi `busy == 0`, đồng thời **chốt (latch)** toàn bộ thông tin yêu cầu (`latched_we`, `latched_line_idx`, `latched_wdata`) ngay tại chu kỳ bắt đầu giao dịch.
 3. **Kết quả**: Triệt tiêu hoàn toàn hiện tượng giao dịch ảo; mọi chu kỳ Clean Miss đều đạt chuẩn **10 chu kỳ** và mọi chu kỳ Dirty Miss đều đạt chuẩn **18 chu kỳ** một cách nhất quán tuyệt đối.
