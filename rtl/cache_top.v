@@ -1,67 +1,49 @@
-// =============================================================================
-// Tên file   : cache_top.v
-// Chức năng  : Module đỉnh (Top-Level Module) tích hợp toàn bộ hệ thống Cache 4KB
-//              Kết nối: Controller, 2x Tag Array, 2x Data Array và Logic True LRU
-// Kiến trúc  : Dung lượng 4KB, 2-Way Set-Associative, 128 Sets, 16 Bytes/Line
-// Giáo trình : Kiến trúc máy tính (Patterson & Hennessy - Chương 5)
-// =============================================================================
+// cache_top.v - Module đỉnh kết nối Controller, 2 Way Tag/Data Array và LRU
 
 `timescale 1ns / 1ps
 `include "cache_defines.vh"
 
 module cache_top #(
-    parameter ADDR_WIDTH      = `ADDR_WIDTH,      // 32 bits
-    parameter DATA_WIDTH      = `DATA_WIDTH,      // 32 bits
-    parameter LINE_WIDTH      = `LINE_WIDTH,      // 128 bits
-    parameter TAG_WIDTH       = `TAG_WIDTH,       // 21 bits
-    parameter INDEX_WIDTH     = `INDEX_WIDTH,     // 7 bits
-    parameter WORD_SEL_WIDTH  = `WORD_SEL_WIDTH,  // 2 bits
-    parameter NUM_SETS        = `NUM_SETS         // 128 Sets
+    parameter ADDR_WIDTH      = `ADDR_WIDTH,
+    parameter DATA_WIDTH      = `DATA_WIDTH,
+    parameter LINE_WIDTH      = `LINE_WIDTH,
+    parameter TAG_WIDTH       = `TAG_WIDTH,
+    parameter INDEX_WIDTH     = `INDEX_WIDTH,
+    parameter WORD_SEL_WIDTH  = `WORD_SEL_WIDTH,
+    parameter NUM_SETS        = `NUM_SETS
 )(
-    input  wire                   clk,        // Xung nhịp hệ thống (Clock 100MHz)
-    input  wire                   rst_n,      // Tín hiệu Reset tích cực mức thấp (Active-low)
+    input  wire                   clk,
+    input  wire                   rst_n,
 
-    // -------------------------------------------------------------------------
-    // 1. GIAO DIỆN KẾT NỐI VỚI CPU (Bus dữ liệu 32-bit)
-    // -------------------------------------------------------------------------
-    input  wire                   cpu_req,    // Tín hiệu xung yêu cầu từ CPU
-    input  wire                   cpu_we,     // 0: Lệnh Đọc, 1: Lệnh Ghi
-    input  wire [ADDR_WIDTH-1:0]  cpu_addr,   // Địa chỉ byte 32-bit CPU phát ra
-    input  wire [DATA_WIDTH-1:0]  cpu_wdata,  // Dữ liệu 32-bit CPU muốn ghi
-    output wire [DATA_WIDTH-1:0]  cpu_rdata,  // Dữ liệu 32-bit Cache trả về cho CPU
-    output wire                   cpu_ready,  // 1: Hoàn thành, 0: CPU bị dừng chờ (Stall)
+    // Giao diện CPU (32-bit)
+    input  wire                   cpu_req,
+    input  wire                   cpu_we,
+    input  wire [ADDR_WIDTH-1:0]  cpu_addr,
+    input  wire [DATA_WIDTH-1:0]  cpu_wdata,
+    output wire [DATA_WIDTH-1:0]  cpu_rdata,
+    output wire                   cpu_ready,
 
-    // -------------------------------------------------------------------------
-    // 2. GIAO DIỆN KẾT NỐI VỚI BỘ NHỚ CHÍNH DRAM (Bus khối 128-bit)
-    // -------------------------------------------------------------------------
-    output wire                   mem_req,    // Tín hiệu yêu cầu gửi sang DRAM
-    output wire                   mem_we,     // 0: Đọc dòng, 1: Ghi trả dòng về DRAM
-    output wire [ADDR_WIDTH-1:0]  mem_addr,   // Địa chỉ khối căn chỉnh 16-byte
-    output wire [LINE_WIDTH-1:0]  mem_wdata,  // Khối 128-bit gửi xuống DRAM (Write-Back)
-    input  wire [LINE_WIDTH-1:0]  mem_rdata,  // Khối 128-bit nạp từ DRAM về Cache
-    input  wire                   mem_ready,  // DRAM phát xung báo hoàn tất (sau 6 chu kỳ)
+    // Giao diện DRAM (128-bit)
+    output wire                   mem_req,
+    output wire                   mem_we,
+    output wire [ADDR_WIDTH-1:0]  mem_addr,
+    output wire [LINE_WIDTH-1:0]  mem_wdata,
+    input  wire [LINE_WIDTH-1:0]  mem_rdata,
+    input  wire                   mem_ready,
 
-    // -------------------------------------------------------------------------
-    // 3. TÍN HIỆU ĐO LƯỜNG & GIÁM SÁT HIỆU NĂNG (Telemetry / Debug Outputs)
-    // -------------------------------------------------------------------------
-    output wire                   hit_out,    // Nhấp nháy = 1 khi Cache Hit
-    output wire                   miss_out,   // Nhấp nháy = 1 khi Cache Miss
-    output wire [2:0]             state_out   // Trạng thái hiện tại của FSM (0 đến 4)
+    // Tín hiệu debug / đo hiệu năng cho testbench
+    output wire                   hit_out,
+    output wire                   miss_out,
+    output wire [2:0]             state_out
 );
 
-    // -------------------------------------------------------------------------
-    // DÂY DẪN KẾT NỐI NỘI BỘ (Internal Wires)
-    // -------------------------------------------------------------------------
     wire [ADDR_WIDTH-1:0]     latched_addr;
     wire [DATA_WIDTH-1:0]     latched_wdata;
     wire                      latched_we;
     wire [LINE_WIDTH-1:0]     refill_line;
     wire                      sel_refill_data;
 
-    // Cơ chế bảo vệ chỉ số Set Index:
-    // Khi đang ở IDLE, lấy địa chỉ trực tiếp từ cpu_addr.
-    // Ngay khi rời IDLE vào xử lý Miss, khóa chặt vào thanh ghi chốt latched_addr
-    // để tránh bị lệch Set nếu CPU bên ngoài đổi tín hiệu trong lúc Stall!
+    // Lúc IDLE lấy địa chỉ trực tiếp từ cpu_addr; khi đang xử lý Miss dùng latched_addr để tránh lệch Set
     wire [INDEX_WIDTH-1:0]    current_index = (state_out == `STATE_IDLE) ? 
                                               cpu_addr[`INDEX_MSB:`INDEX_LSB] : 
                                               latched_addr[`INDEX_MSB:`INDEX_LSB];
@@ -70,56 +52,36 @@ module cache_top #(
                                                  cpu_addr[`WORD_SEL_MSB:`WORD_SEL_LSB] : 
                                                  latched_addr[`WORD_SEL_MSB:`WORD_SEL_LSB];
 
-    // Dữ liệu đọc ra từ 2 mảng Tag Array và 2 mảng Data Array
     wire [TAG_WIDTH-1:0]      tag0, tag1;
     wire                      valid0, valid1;
     wire                      dirty0, dirty1;
     wire [LINE_WIDTH-1:0]     line_out0, line_out1;
     wire [DATA_WIDTH-1:0]     word_out0, word_out1;
 
-    // Các tín hiệu cho phép ghi từ Bộ điều khiển Controller
     wire tag_we0, dirty_we0, dirty_in0, line_we0, word_we0;
     wire tag_we1, dirty_we1, dirty_in1, line_we1, word_we1;
 
-    // Các tín hiệu của khối quản lý thuật toán thay thế True LRU
     wire lru_update;
     wire lru_access_way;
     wire lru_bit;
     wire victim_way;
 
 
-    // =========================================================================
-    // KHỐI SO SÁNH TAG SONG SONG & PHÁT HIỆN HIT / MISS (Hình 5.18 Giáo trình)
-    // =========================================================================
-    // Trường Tag cần tìm kiếm: Lấy 21 bit cao của địa chỉ chốt
+    // So sánh Tag song song trên cả 2 Way
     wire [TAG_WIDTH-1:0] req_tag = latched_addr[`TAG_MSB:`TAG_LSB];
-
-    // So sánh song song trên cả 2 Way:
-    // Trúng Way 0 khi: Way 0 đã có dữ liệu hợp lệ (valid0=1) VÀ Tag của Way 0 trùng khớp
     wire hit0 = valid0 && (tag0 == req_tag);
-
-    // Trúng Way 1 khi: Way 1 đã có dữ liệu hợp lệ (valid1=1) VÀ Tag của Way 1 trùng khớp
     wire hit1 = valid1 && (tag1 == req_tag);
-
-    // Cache Hit khi trúng ở một trong hai Way
     wire hit  = hit0 || hit1;
-
-    // Đường trúng: 0 nếu trúng ở Way 0, 1 nếu trúng ở Way 1
     wire hit_way = hit1;
 
-    // Tín hiệu báo ra ngoài để Testbench đếm số lần Hit/Miss
     assign hit_out  = (state_out == `STATE_COMPARE_TAG) && hit;
     assign miss_out = (state_out == `STATE_COMPARE_TAG) && !hit;
 
 
-    // =========================================================================
-    // MẠCH CHỌN DỮ LIỆU ĐỌC TRẢ VỀ CHO CPU (Read Multiplexers)
-    // =========================================================================
-    // Khi Hit: Chọn từ 32-bit của Way 0 hoặc Way 1 tùy vào đường trúng
+    // Mạch chọn dữ liệu đọc trả về CPU
     wire [DATA_WIDTH-1:0] hit_rdata = (hit0) ? word_out0 : word_out1;
 
-    // Mạch Bypass: Trích xuất trực tiếp từ 32-bit từ dòng vừa nạp từ DRAM
-    // giúp trả dữ liệu cho CPU ngay trong chu kỳ REFILL_UPDATE mà không phải đợi thêm 1 chu kỳ!
+    // Bypass dữ liệu vừa nạp từ DRAM ra thẳng cpu_rdata tại chu kỳ REFILL_UPDATE (đỡ trễ 1 chu kỳ)
     reg [DATA_WIDTH-1:0] refill_rdata;
     always @(*) begin
         case (latched_addr[`WORD_SEL_MSB:`WORD_SEL_LSB])
@@ -131,16 +93,10 @@ module cache_top #(
         endcase
     end
 
-    // Dữ liệu cuối cùng xuất ra cổng cpu_rdata:
-    // Nếu vừa nạp xong (sel_refill_data = 1) -> lấy từ refill_rdata; còn lại lấy từ hit_rdata
     assign cpu_rdata = (sel_refill_data) ? refill_rdata : hit_rdata;
 
 
-    // =========================================================================
-    // KHỞI TẠO VÀ GHÉP NỐI CÁC THỰC THỂ CON (Module Instantiations)
-    // =========================================================================
-
-    // 1. Mảng Thẻ địa chỉ của Way 0 (Tag Array Way 0)
+    // Khởi tạo Way 0 (Tag Array + Data Array 2KB)
     tag_array #(
         .NUM_SETS(NUM_SETS),
         .INDEX_WIDTH(INDEX_WIDTH),
@@ -158,7 +114,6 @@ module cache_top #(
         .dirty_out(dirty0)
     );
 
-    // 2. Mảng Dữ liệu của Way 0 (Data Array Way 0: 2 KB)
     data_array #(
         .NUM_SETS(NUM_SETS),
         .INDEX_WIDTH(INDEX_WIDTH),
@@ -178,7 +133,7 @@ module cache_top #(
         .word_out(word_out0)
     );
 
-    // 3. Mảng Thẻ địa chỉ của Way 1 (Tag Array Way 1)
+    // Khởi tạo Way 1 (Tag Array + Data Array 2KB)
     tag_array #(
         .NUM_SETS(NUM_SETS),
         .INDEX_WIDTH(INDEX_WIDTH),
@@ -196,7 +151,6 @@ module cache_top #(
         .dirty_out(dirty1)
     );
 
-    // 4. Mảng Dữ liệu của Way 1 (Data Array Way 1: 2 KB)
     data_array #(
         .NUM_SETS(NUM_SETS),
         .INDEX_WIDTH(INDEX_WIDTH),
@@ -216,7 +170,7 @@ module cache_top #(
         .word_out(word_out1)
     );
 
-    // 5. Khối Quản lý Thuật toán Thay thế True LRU (1-bit/Set)
+    // Khối quản lý thay thế True LRU
     lru_logic #(
         .NUM_SETS(NUM_SETS),
         .INDEX_WIDTH(INDEX_WIDTH)
@@ -232,7 +186,7 @@ module cache_top #(
         .victim_way(victim_way)
     );
 
-    // 6. Bộ điều khiển trung tâm (FSM Controller)
+    // Bộ điều khiển trung tâm FSM 5 trạng thái
     cache_controller #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .DATA_WIDTH(DATA_WIDTH),
@@ -244,14 +198,12 @@ module cache_top #(
         .clk(clk),
         .rst_n(rst_n),
 
-        // Giao tiếp CPU
         .cpu_req(cpu_req),
         .cpu_we(cpu_we),
         .cpu_addr(cpu_addr),
         .cpu_wdata(cpu_wdata),
         .cpu_ready(cpu_ready),
 
-        // Trạng thái từ Datapath
         .hit(hit),
         .hit_way(hit_way),
         .valid0(valid0),
@@ -264,7 +216,6 @@ module cache_top #(
         .line_out1(line_out1),
         .victim_way(victim_way),
 
-        // Giao tiếp DRAM
         .mem_req(mem_req),
         .mem_we(mem_we),
         .mem_addr(mem_addr),
@@ -272,7 +223,6 @@ module cache_top #(
         .mem_rdata(mem_rdata),
         .mem_ready(mem_ready),
 
-        // Điều khiển Datapath
         .latched_addr(latched_addr),
         .latched_wdata(latched_wdata),
         .latched_we(latched_we),

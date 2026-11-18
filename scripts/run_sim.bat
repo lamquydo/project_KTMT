@@ -1,8 +1,5 @@
 @echo off
-REM =============================================================================
-REM File: scripts/run_sim.bat
-REM Description: One-click Windows Batch Script to Compile & Simulate Cache RTL
-REM =============================================================================
+REM Script bien dich va chay mo phong Cache RTL bang Icarus Verilog
 
 pushd "%~dp0.."
 

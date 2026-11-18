@@ -1,196 +1,211 @@
-# Tài Liệu 01: Cơ Sở Lý Thuyết Toàn Diện Về Bộ Nhớ Đệm (Cache Memory) & Hệ Thống Phân Cấp Bộ Nhớ
+# Tài Liệu 01: Cơ Sở Lý Thuyết Bộ Nhớ Đệm (Cache) & Ánh Xạ Vào Thiết Kế Đồ Án
 
-> **Tài liệu chuyên khảo phục vụ Đồ án Kiến trúc Máy tính (KTMT)**  
-> **Đối chiếu chuẩn học thuật**: Giáo trình *Computer Organization and Design: The Hardware/Software Interface* (David A. Patterson & John L. Hennessy – Chương 5: *Large and Fast: Exploiting Memory Hierarchy*, Mục 5.3, 5.4 và 5.5 trong file [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)).
+Tài liệu này giúp sinh viên nắm vững toàn bộ nền tảng lý thuyết về bộ nhớ đệm (**Cache Memory**) theo trình tự từ trực giác đến công thức, và **ánh xạ trực tiếp từng khái niệm vào mã nguồn Verilog RTL** của đồ án **4KB 2-Way Set-Associative Cache Controller**.
 
 ---
 
 ## Mục Lục
-1. [Tổng quan về Phân cấp Bộ nhớ & Nguyên lý Cục bộ (Principle of Locality)](#1-tổng-quan-về-phân-cấp-bộ-nhớ--nguyên-lý-cục-bộ-principle-of-locality)
-2. [Các Phương pháp Tổ chức & Ánh xạ Bộ nhớ Đệm (Cache Mapping)](#2-các-phương-pháp-tổ-chức--ánh-xạ-bộ-nhớ-đệm-cache-mapping)
-3. [Giải mã Địa chỉ 32-bit & Tính toán Dung lượng Thực tế của Cache](#3-giải-mã-địa-chỉ-32-bit--tính-toán-dung-lượng-thực-tế-của-cache)
-4. [Xử lý Cache Miss, Chính sách Ghi (Write Policies) & Thay thế (LRU)](#4-xử-lý-cache-miss-chính-sách-ghi-write-policies--thay-thế-lru)
-5. [Đo lường và Đánh giá Hiệu năng Cache (AMAT)](#5-đo-lường-và-đánh-giá-hiệu-năng-cache-amat)
+1. [Tại Sao CPU Cần Cache? (Memory Wall & Nguyên Lý Cục Bộ)](#1-tại-sao-cpu-cần-cache-memory-wall--nguyên-lý-cục-bộ)
+2. [Ba Phương Pháp Ánh Xạ Cache & Lý Do Chọn 2-Way Set-Associative](#2-ba-phương-pháp-ánh-xạ-cache--lý-do-chọn-2-way-set-associative)
+3. [Cách Chia Địa Chỉ 32-bit & Tự Tính Tay Từng Trường Bit](#3-cách-chia-địa-chỉ-32-bit--tự-tính-tay-từng-trường-bit)
+4. [Cấu Trúc Vật Lý Của Cache 4KB 2-Way & Tổng Số Bit SRAM](#4-cấu-trúc-vật-lý-của-cache-4kb-2-way--tổng-số-bit-sram)
+5. [Phân Loại Cache Miss (3C), Chính Sách Ghi & Thuật Toán LRU](#5-phân-loại-cache-miss-3c-chính-sách-ghi--thuật-toán-lru)
+6. [Đánh Giá Hiệu Năng Qua AMAT & Đối Chiếu Số Liệu Thực Tế](#6-đánh-giá-hiệu-năng-qua-amat--đối-chiếu-số-liệu-thực-tế)
 
 ---
 
-## 1. Tổng quan về Phân cấp Bộ nhớ & Nguyên lý Cục bộ (Principle of Locality)
+## 1. Tại Sao CPU Cần Cache? (Memory Wall & Nguyên Lý Cục Bộ)
 
-### 1.1. Khoảng cách Hiệu năng CPU – DRAM (Memory Wall)
-Trong kiến trúc máy tính hiện đại, tốc độ xử lý của vi xử lý (CPU) tăng nhanh hơn rất nhiều so với tốc độ truy cập của bộ nhớ chính (DRAM). Một chu kỳ lệnh của CPU chỉ mất khoảng $0.25\text{ ns} - 1\text{ ns}$, trong khi một lần truy cập DRAM mất từ $50\text{ ns} - 100\text{ ns}$ (tương đương hàng trăm chu kỳ xung nhịp CPU). Nếu mọi lệnh đọc/ghi dữ liệu đều phải truy cập trực tiếp xuống DRAM, CPU sẽ dành phần lớn thời gian ở trạng thái chờ (**Memory Stall**).
+### 1.1. Khoảng cách tốc độ CPU – DRAM
+Trong máy tính, CPU thực hiện phép tính theo xung nhịp rất nhanh, còn bộ nhớ chính **DRAM** có dung lượng lớn nhưng thời gian phản hồi chậm hơn nhiều (hiện tượng *Memory Wall*). Nếu CPU truy cập trực tiếp xuống DRAM cho mọi lệnh đọc/ghi, CPU sẽ phải đứng chờ bộ nhớ phần lớn thời gian (**Memory Stall**).
 
-Để giải quyết bài toán này, các kiến trúc sư máy tính xây dựng **Hệ thống Phân cấp Bộ nhớ (Memory Hierarchy)**, đặt một bộ nhớ SRAM nhỏ nhưng cực nhanh gọi là **Cache (Bộ nhớ đệm)** nằm ngay giữa CPU và DRAM.
+Để khắc phục, người ta đặt một bộ nhớ **SRAM** dung lượng nhỏ nhưng tốc độ cực nhanh gọi là **Cache** nằm ngay giữa CPU và DRAM:
 
-### 1.2. Nguyên lý Cục bộ (Principle of Locality)
-Cache hoạt động hiệu quả (tỷ lệ đoán trúng thường đạt $> 95\%$) nhờ khai thác **Nguyên lý Cục bộ** của chương trình máy tính:
-1. **Tính cục bộ về thời gian (Temporal Locality)**: Nếu một vùng nhớ (lệnh hoặc dữ liệu) vừa được CPU truy cập, khả năng rất cao nó sẽ được truy cập lại trong tương lai gần (ví dụ: các biến đếm, các lệnh nằm trong vòng lặp `for`/`while`).
-   - *Cách Cache khai thác*: Giữ lại các khối dữ liệu vừa được truy cập ở trong Cache và chỉ trục xuất các khối đã lâu không được dùng đến (**LRU**).
-2. **Tính cục bộ về không gian (Spatial Locality)**: Nếu một địa chỉ bộ nhớ được truy cập, các địa chỉ nằm lân cận nó cũng có xác suất rất cao sẽ được truy cập tiếp theo (ví dụ: duyệt mảng tuần tự, thực thi tuần tự các lệnh chương trình).
-   - *Cách Cache khai thác*: Khi xảy ra Cache Miss tại một từ (Word), thay vì chỉ lấy đúng 1 Word (4 Bytes) từ DRAM, bộ điều khiển Cache sẽ nạp cả một **Khối / Dòng nhớ (Cache Block / Cache Line)** gồm nhiều Word liên tiếp nhau (trong đồ án này là **16 Bytes = 4 Words** trên một dòng).
+```text
++---------+     Bus 32-bit (1 Word)      +---------------+     Bus 128-bit (1 Line)     +----------+
+|   CPU   | <=========================>  |  4KB L1 Cache | <=========================>  |   DRAM   |
+| (100MHz)|  Hit: 1 chu kỳ (cpu_ready=1) |   (SRAM nhanh)|  Miss: 10 hoặc 18 chu kỳ   | (Chậm)   |
++---------+                              +---------------+                              +----------+
+```
 
-### 1.3. Các khái niệm cơ bản
-- **Cache Hit (Đoán trúng)**: Dữ liệu CPU yêu cầu đang có mặt và hợp lệ (`Valid = 1`, `Tag` khớp) trong Cache. Giao dịch hoàn tất ngay lập tức (trong đồ án là **1 chu kỳ xung nhịp**).
-- **Cache Miss (Đoán trượt / Lỗi Cache)**: Dữ liệu CPU yêu cầu không có trong Cache. Bộ điều khiển phải tạm dừng CPU (`cpu_ready = 0` / **CPU Stall**), truy cập xuống DRAM để lấy khối dữ liệu về nạp vào Cache, sau đó mới trả dữ liệu cho CPU.
-- **Hit Rate (Tỷ lệ trúng)** & **Miss Rate (Tỷ lệ trượt)**:
-  $$\text{Hit Rate} = \frac{\text{Số lần Hit}}{\text{Tổng số lần truy cập}}, \qquad \text{Miss Rate} = 1 - \text{Hit Rate} = \frac{\text{Số lần Miss}}{\text{Tổng số lần truy cập}}$$
-- **Hit Time**: Thời gian để kiểm tra Tag và đọc/ghi dữ liệu khi Hit (1 chu kỳ).
-- **Miss Penalty (Hình phạt khi trượt)**: Số chu kỳ CPU phải dừng hoạt động (Stall) để chờ xử lý xong một lần Miss từ bộ nhớ cấp dưới (DRAM).
+Trong mô phỏng của đồ án (`100 MHz`, tức `1 chu kỳ = 10 ns`):
+- **Khi Hit (trúng Cache):** Dữ liệu có sẵn trong SRAM $\to$ CPU nhận được ngay sau **1 chu kỳ (`10 ns`)**.
+- **Khi Miss (trượt Cache):** CPU bị dừng chờ (`cpu_ready = 0`) để bộ điều khiển xuống DRAM lấy dữ liệu $\to$ mất **10 chu kỳ (`100 ns`)** hoặc **18 chu kỳ (`180 ns`)** nếu phải ghi trả dữ liệu cũ trước.
+
+### 1.2. Tại sao Cache nhỏ (4KB) lại giúp CPU chạy nhanh? — Nguyên lý Cục bộ
+Một chương trình thực tế có thể dùng hàng megabyte hoặc gigabyte bộ nhớ, nhưng tại một khoảng thời gian ngắn, CPU chỉ xoay quanh một vùng nhỏ nhờ **Nguyên lý Cục bộ (Principle of Locality)**:
+
+1. **Cục bộ về thời gian (Temporal Locality):**
+   - *Ý nghĩa:* Dữ liệu vừa được dùng thì khả năng cao sẽ sớm được dùng lại (ví dụ biến đếm vòng lặp, biến tổng).
+   - *Cách đồ án khai thác:* Dữ liệu vừa truy cập được giữ lại trong SRAM. Khi đầy chỗ, khối [`rtl/lru_logic.v`](../rtl/lru_logic.v) chỉ đẩy đi dòng **lâu chưa được dùng nhất (LRU)** và giữ lại dòng mới dùng (MRU).
+2. **Cục bộ về không gian (Spatial Locality):**
+   - *Ý nghĩa:* Nếu vừa đọc một ô nhớ tại địa chỉ `X`, các ô nhớ nằm ngay cạnh `X + 4`, `X + 8`, `X + 12` cũng rất dễ được đọc tiếp theo (ví dụ duyệt mảng `a[0], a[1], a[2], a[3]`).
+   - *Cách đồ án khai thác:* Thay vì chỉ lấy 1 Word (`4 Bytes`) khi Miss, Cache nạp hẳn **1 dòng (Cache Line) gồm `16 Bytes = 4 Words` liên tiếp**. Nhờ vậy, chỉ tốn 1 lần Miss ở Word đầu tiên (`0x1000`), 3 Word kế tiếp (`0x1004`, `0x1008`, `0x100C`) đều **Hit trong 1 chu kỳ** (xem Kịch bản 2 và 8 trong [`sim/tb_cache_top.v`](../sim/tb_cache_top.v)).
+
+### 1.3. Các khái niệm cần nhớ
+- **Cache Hit:** Dữ liệu CPU cần đang nằm hợp lệ trong Cache (`valid == 1` và `tag` trùng khớp).
+- **Cache Miss:** Dữ liệu không có trong Cache (hoặc chưa hợp lệ).
+- **Hit Time:** Thời gian kiểm tra Tag và hoàn tất giao dịch khi Hit (`1 chu kỳ`).
+- **Miss Penalty:** Số chu kỳ CPU phải dừng chờ (*Stall*) thêm khi Miss (`9 chu kỳ` với Clean Miss; `17 chu kỳ` với Dirty Miss).
+- **Hit Rate & Miss Rate:**
+  $$\text{Hit Rate} = \frac{\text{Số lần Hit}}{\text{Tổng số truy cập}}, \qquad \text{Miss Rate} = 1 - \text{Hit Rate} = \frac{\text{Số lần Miss}}{\text{Tổng số truy cập}}$$
 
 ---
 
-## 2. Các Phương pháp Tổ chức & Ánh xạ Bộ nhớ Đệm (Cache Mapping)
+## 2. Ba Phương Pháp Ánh Xạ Cache & Lý Do Chọn 2-Way Set-Associative
 
-Khi nạp một khối dữ liệu (Block) từ DRAM lên Cache, câu hỏi cốt lõi là: **Khối dữ liệu đó được phép đặt vào vị trí nào trong Cache?** Có 3 phương pháp ánh xạ kinh điển (Mục 5.3 & 5.4 trong [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)):
+Một câu hỏi cốt lõi khi thiết kế Cache: **Khi nạp một khối 16 Bytes từ DRAM lên, nó được phép nằm ở dòng nào trong 256 dòng của Cache?**
 
 ```mermaid
 flowchart TD
-    A["Các Phương Pháp Ánh Xạ Cache (Cache Placement Policies)"] --> B["1. Direct-Mapped (Ánh xạ trực tiếp - 1-Way)"]
-    A --> C["2. Set-Associative (Ánh xạ liên kết tập hợp - N-Way)"]
-    A --> D["3. Fully Associative (Ánh xạ liên kết toàn phần)"]
-    B --> B1["Mỗi Block bộ nhớ chỉ vào được ĐÚNG 1 dòng Cache duy nhất:\nIndex = (Block Address) mod (Total Cache Blocks)"]
-    C --> C1["Cache chia thành các Set (mỗi Set có N Ways).\nBlock ánh xạ cố định vào 1 Set, nhưng đặt tự do trong N Ways của Set đó:\nSet Index = (Block Address) mod (Number of Sets)"]
-    D --> D1["Mọi Block bộ nhớ có thể đặt vào BẤT KỲ dòng nào trong toàn bộ Cache\n(Tương đương 1 Set duy nhất chứa toàn bộ các dòng)"]
+    A["3 Phương Pháp Ánh Xạ Cache"] --> B["1. Direct-Mapped (1-Way)"]
+    A --> C["2. Set-Associative (N-Way) — Đồ án chọn N = 2"]
+    A --> D["3. Fully Associative"]
+    B --> B1["1 khối DRAM chỉ có ĐÚNG 1 chỗ trong Cache\n(1 bộ so sánh Tag, dễ xung đột liên tục)"]
+    C --> C1["1 khối DRAM vào cố định 1 Set, nhưng tự do chọn\n1 trong N Ways của Set đó (N bộ so sánh Tag)"]
+    D --> D1["1 khối DRAM đặt ở BẤT KỲ dòng nào\n(Phải so sánh Tag trên toàn bộ 256 dòng)"]
 ```
 
-### 2.1. Direct-Mapped Cache (Ánh xạ trực tiếp – 1-Way)
-- Mỗi khối bộ nhớ ở DRAM chỉ có **đúng 1 vị trí duy nhất** trong Cache:
-  $$\text{Cache Block Index} = (\text{Block Address}) \bmod (\text{Tổng số Block trong Cache})$$
-- **Ưu điểm**: Phần cứng cực kỳ đơn giản, chỉ cần **1 bộ so sánh Tag (Comparator)**, không cần mạch chọn kênh (Multiplexor) giữa các Way, không cần thuật toán thay thế.
-- **Nhược điểm**: Tỷ lệ **Conflict Miss (Trượt do xung đột)** rất cao. Nếu chương trình truy cập luân phiên 2 địa chỉ cùng ánh xạ vào một chỉ số `Index`, chúng sẽ liên tục đá nhau ra khỏi Cache (hiện tượng **Ping-Pong / Thrashing**) dù toàn bộ các dòng khác của Cache đang trống.
+### So sánh trực quan để hiểu lý do lựa chọn
 
-### 2.2. Fully Associative Cache (Ánh xạ liên kết toàn phần)
-- Một khối dữ liệu từ DRAM có thể đặt vào **bất kỳ dòng nào** trong Cache.
-- **Ưu điểm**: Triệt tiêu hoàn toàn Conflict Miss, đạt Miss Rate thấp nhất.
-- **Nhược điểm**: Để tìm dữ liệu, phần cứng phải so sánh `Tag` song song trên **tất cả các dòng** cùng lúc (đòi hỏi hàng trăm bộ Comparator hoặc bộ nhớ CAM đắt đỏ, tốn diện tích silicon và năng lượng, làm tăng thời gian Hit Time). Chỉ thực tế cho các bộ đệm rất nhỏ (như TLB từ 32–64 mục).
+| Tiêu chí | Direct-Mapped (1-Way) | **2-Way Set-Associative (Đồ án)** | Fully Associative (256-Way) |
+| :--- | :--- | :--- | :--- |
+| **Số vị trí khả dĩ cho 1 Block** | Đúng `1` dòng | `2` dòng (`Way 0` hoặc `Way 1` trong 1 Set) | Tất cả `256` dòng |
+| **Số bộ so sánh Tag song song** | `1` bộ | `2` bộ (`hit0`, `hit1` trong `cache_top.v`) | `256` bộ (rất đắt và tốn điện) |
+| **Cần thuật toán thay thế?** | Không (chỉ có 1 chỗ) | Có (`True LRU` 1-bit/Set) | Có (rất phức tạp cho 256 dòng) |
+| **Chống xung đột (Conflict Miss)** | Kém (dễ bị *ping-pong*) | **Tốt** (giữ được 2 khối cùng Set) | Tốt nhất (không có Conflict Miss) |
 
-### 2.3. $N$-Way Set-Associative Cache (Ánh xạ liên kết tập hợp $N$ đường)
-Đây là sự dung hòa hoàn hảo giữa Direct-Mapped và Fully Associative, được sử dụng trong hầu hết các bộ vi xử lý thương mại hiện nay cũng như trong **Đồ án KTMT này ($N = 2$)**:
-- Toàn bộ các dòng Cache được chia thành các **Tập hợp (Sets)**, mỗi Set chứa đúng **$N$ dòng (gọi là $N$ Ways)**.
-- Một khối bộ nhớ được ánh xạ cố định vào một Set theo phép chia lấy dư:
-  $$\text{Set Index} = (\text{Block Address}) \bmod (\text{Số lượng Sets trong Cache})$$
-- Bên trong Set được chọn, khối dữ liệu có thể nằm ở **bất kỳ Way nào trong $N$ Ways**. Khi tìm kiếm, phần cứng dùng `Set Index` để trỏ tới đúng hàng (Set) trong SRAM, đọc đồng thời $N$ giá trị Tag từ $N$ Ways và dùng **$N$ bộ so sánh (Comparators)** hoạt động song song.
-- Theo số liệu thực nghiệm SPEC CPU2000 trong giáo trình (Hình 5.16, trang 407 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)), chỉ cần nâng từ **1-Way (Direct-Mapped)** lên **2-Way Set-Associative** đã giúp giảm khoảng **15% tỷ lệ Miss Rate** với chi phí phần cứng tăng thêm rất nhỏ!
+**Ví dụ minh họa trực tiếp từ Kịch bản 7 (`Set 10`):**
+Giả sử chương trình đọc liên tiếp chuỗi khối `A (0x00A0) -> B (0x08A0) -> A (0x00A0) -> C (0x10A0) -> B (0x08A0)`. Cả `A`, `B`, `C` đều cùng rơi vào `Set 10`:
+- Nếu dùng **Direct-Mapped**: `Set 10` chỉ có 1 chỗ. `A` vào $\to$ `B` đẩy `A` ra $\to$ đọc lại `A` bị Miss và đẩy `B` ra $\to$ `C` đẩy `A` ra $\to$ `B` đẩy `C` ra. Kết quả: **5 Miss, 0 Hit**.
+- Nếu dùng **2-Way LRU của đồ án**: `A` vào `Way 0`, `B` vào `Way 1`. Đến lần đọc `A` thứ hai, `A` vẫn còn ở `Way 0` nên đạt **HIT trong 1 chu kỳ**! Kết quả: **4 Miss, 1 Hit**.
 
 ---
 
-## 3. Giải mã Địa chỉ 32-bit & Tính toán Dung lượng Thực tế của Cache
+## 3. Cách Chia Địa Chỉ 32-bit & Tự Tính Tay Từng Trường Bit
 
-### 3.1. Phân tích Bài toán Thiết kế của Đồ án (`cache_defines.vh`)
-Đồ án thiết kế bộ nhớ đệm có các thông số:
-- **Dung lượng dữ liệu ($C$)**: $4\text{ KB} = 4096\text{ Bytes} = 2^{12}\text{ Bytes}$.
-- **Kích thước một dòng Cache ($B$ - Block/Line Size)**: $16\text{ Bytes} = 4\text{ Words} \times 4\text{ Bytes/Word} = 128\text{ bits}$.
-- **Độ kết hợp ($N$ - Associativity)**: $2\text{-Way Set-Associative}$ ($N = 2$).
-- **Độ rộng địa chỉ vật lý**: $32\text{ bits}$ (`cpu_addr[31:0]`).
+Mọi tham số địa chỉ trong project đều nằm trong [`rtl/cache_defines.vh`](../rtl/cache_defines.vh). Sinh viên có thể suy ra số bit của từng trường chỉ bằng 4 bước tính từ phải sang trái:
 
-Từ các thông số trên, ta suy ra cấu trúc tổ chức bộ nhớ đệm:
-1. **Tổng số dòng Cache (Total Cache Lines)**:
-   $$L = \frac{C}{B} = \frac{4096}{16} = 256\text{ dòng (lines)}$$
-2. **Tổng số tập hợp (Number of Sets - $S$)**:
-   $$S = \frac{L}{N} = \frac{256}{2} = 128\text{ Sets} = 2^7\text{ Sets}$$
-3. **Phân tách các trường bit của Địa chỉ 32-bit (`cpu_addr[31:0]`)**:
-   - **Byte Offset (`[1:0]` – 2 bits)**: Chọn 1 Byte trong 1 Word 4 Bytes ($\log_2(4) = 2\text{ bits}$). Vì giao tiếp CPU đọc/ghi theo từng Word 32-bit căn chỉnh (word-aligned), 2 bit này luôn bằng `2'b00`.
-   - **Word Offset / Word Select (`[3:2]` – 2 bits)**: Chọn 1 Word (32-bit) trong 4 Words của một dòng 16 Bytes ($\log_2(4) = 2\text{ bits}$).
-     - Hợp của `Word Select [3:2]` và `Byte Offset [1:0]` tạo thành **Block Offset (`[3:0]` – 4 bits)** vì $\log_2(16\text{ Bytes}) = 4\text{ bits}$.
-   - **Set Index (`[10:4]` – 7 bits)**: Dùng để định địa chỉ chọn 1 trong 128 Sets ($\log_2(128) = 7\text{ bits}$).
-   - **Tag (`[31:11]` – 21 bits)**: Các bit địa chỉ bậc cao còn lại dùng để định danh duy nhất khối nhớ khi nhiều khối cùng ánh xạ vào một Set:
-     $$\text{Tag Width} = 32 - (\text{Index Width} + \text{Block Offset Width}) = 32 - (7 + 4) = 21\text{ bits}$$
+### Bước 1: Xác định kích thước dòng $\to$ suy ra **Block Offset**
+- Mỗi dòng Cache chứa `16 Bytes` $= 2^4\text{ Bytes}$ $\implies$ cần **4 bit thấp `[3:0]`** để định vị từng byte trong dòng.
+- Vì mỗi Word của CPU rộng `32 bits = 4 Bytes` $= 2^2\text{ Bytes}$:
+  - **`[1:0]` Byte Offset (2 bits):** Chọn 1 trong 4 Byte bên trong 1 Word. *(Do CPU trong đồ án đọc/ghi theo đơn vị cả Word 32-bit căn chỉnh, 2 bit này luôn là `2'b00`)*.
+  - **`[3:2]` Word Select (2 bits):** Chọn 1 trong 4 Words (`Word 0`..`Word 3`) bên trong 1 dòng 16 Bytes.
+
+### Bước 2: Xác định số lượng Set $\to$ suy ra **Set Index**
+- Tổng dung lượng dữ liệu: $4\text{ KB} = 4,096\text{ Bytes}$.
+- Tổng số dòng Cache: $\dfrac{4,096\text{ Bytes}}{16\text{ Bytes/dòng}} = 256\text{ dòng}$.
+- Vì là **2-Way** (mỗi Set gồm 2 dòng): $\text{Số Sets} = \dfrac{256}{2} = 128\text{ Sets} = 2^7$.
+- $\implies$ Cần **7 bit `[10:4]`** làm **Set Index** (địa chỉ từ `0` đến `127`).
+
+### Bước 3: Phần còn lại ở bên trái $\to$ suy ra **Tag**
+- Địa chỉ CPU rộng `32 bits` $\implies \text{Tag} = 32 - 7 - 4 = \mathbf{21\text{ bits}}$ ở vị trí **`[31:11]`**.
 
 ```text
-+-----------------------------------+-------------------+------------------+------------------+
-|             TAG (21 bits)         |  INDEX (7 bits)   | WORD SEL (2 bits)| BYTE OFF (2 bits)|
-|              bits [31:11]         |    bits [10:4]    |    bits [3:2]    |    bits [1:0]    |
-+-----------------------------------+-------------------+------------------+------------------+
-  So sánh song song với Tag0 & Tag1   Chọn 1 trong 128    Chọn 1 trong 4     Chọn Byte trong
-  để kiểm tra Hit hay Miss            Sets của Cache      Words (32-bit)     Word (Aligned=00)
+ 31                         11 10           4 3        2 1        0
++-----------------------------+--------------+----------+----------+
+|         Tag (21 bits)       | Index (7 bit)| Word(2b) | Byte(2b) |
++-----------------------------+--------------+----------+----------+
+|<- Định danh khối nhớ DRAM ->|<- Chọn Set ->|<- Word ->|<- Byte ->|
 ```
 
-### 3.2. Công thức Tính Tổng Số Bit Vật lý (Total Physical Bits in Cache)
-Theo quy ước tên gọi kiến trúc máy tính, khi gọi **"4KB Cache"**, con số $4\text{ KB}$ ($32,768\text{ bits}$) chỉ tính phần dung lượng lưu trữ dữ liệu thuần túy (**Data Array**). Trong thực tế phần cứng (xem Mục 5.3 trang 389–390 và Mục 5.4 trang 409 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)), bộ nhớ Cache còn phải lưu trữ các bit siêu dữ liệu (**Metadata**):
-- **Valid bit ($1\text{ bit/line}$)**: Cho biết dòng Cache có chứa dữ liệu hợp lệ hay đang trống (khi mới khởi động/Reset, toàn bộ `Valid = 0`).
-- **Dirty bit ($1\text{ bit/line}$)**: Bắt buộc đối với chính sách **Write-Back**, cho biết dữ liệu trong dòng Cache đã bị CPU ghi đè (khác với DRAM) hay chưa.
-- **Tag bits ($21\text{ bits/line}$)**: Lưu trường địa chỉ Tag.
-- **LRU bit ($1\text{ bit/set}$)**: Lưu trạng thái đường nào ít được dùng gần đây nhất trong mỗi Set.
+### Bước 4: Mẹo đổi nhanh từ số Hex sang `(Tag, Index, Word)`
+Vì `Index` nằm ở bit `[10:4]` và `Block Offset` ở bit `[3:0]`, sinh viên chỉ cần viết 3 chữ số Hex cuối (12 bit thấp `[11:0]`) ra nhị phân:
+- **4 bit cuối (`[3:0]`):** chính là chữ số Hex cuối cùng $\to$ 2 bit cao của nó là `Word`, 2 bit thấp là `Byte`.
+- **7 bit tiếp theo (`[10:4]`):** lấy 4 bit của chữ số Hex kế cuối ghép với 3 bit thấp của chữ số Hex thứ 3 từ phải sang.
+- **21 bit cao (`[31:11]`):** toàn bộ phần còn lại bên trái là `Tag`.
 
-Tổng số bit SRAM vật lý cần thiết cho bộ **4KB 2-Way Set-Associative Write-Back Cache** của đồ án là:
-$$\begin{aligned}
-\text{Total Bits} &= S \times \Big[ N \times \left(\text{Data Line Bits} + \text{Tag Bits} + \text{Valid Bit} + \text{Dirty Bit}\right) + \text{LRU Bit} \Big] \\
-&= 128 \times \Big[ 2 \times (128 + 21 + 1 + 1) + 1 \Big] \\
-&= 128 \times \Big[ 2 \times 151 + 1 \Big] = 128 \times 303 = \mathbf{38,784\text{ bits}} \approx 4.73\text{ KiB}
-\end{aligned}$$
-Như vậy, phần siêu dữ liệu điều khiển (Tag + Valid + Dirty + LRU) chiếm $6,016\text{ bits}$ (tương đương **18.36%** so với dung lượng dữ liệu 4KB).
+**Ví dụ thực tế từ [`sim/tb_cache_top.v`](../sim/tb_cache_top.v):**
+
+| Địa chỉ `cpu_addr` | 12 bit cuối (`[11:0]`) | Tách `[11]` \| `[10:4]` \| `[3:2]` \| `[1:0]` | `Tag` (`[31:11]`) | `Set Index` (`[10:4]`) | `Word` (`[3:2]`) |
+| :--- | :---: | :--- | :---: | :---: | :---: |
+| `0x0000_1000` | `0x000` | `0 \| 000_0000 \| 00 \| 00` | `0x00002` | `0` | `0` |
+| `0x0000_100C` | `0x00C` | `0 \| 000_0000 \| 11 \| 00` | `0x00002` | `0` | `3` |
+| `0x0000_2000` | `0x000` | `0 \| 000_0000 \| 00 \| 00` | `0x00004` | `0` | `0` |
+| `0x0000_00A0` | `0x0A0` | `0 \| 000_1010 \| 00 \| 00` | `0x00000` | `10` | `0` |
+| `0x0000_08A0` | `0x8A0` | `1 \| 000_1010 \| 00 \| 00` | `0x00001` | `10` | `0` |
+| `0x0000_03F0` | `0x3F0` | `0 \| 011_1111 \| 00 \| 00` | `0x00000` | `63` | `0` |
+| `0x0000_07F0` | `0x7F0` | `0 \| 111_1111 \| 00 \| 00` | `0x00000` | `127` | `0` |
+
+> **Nhìn vào bảng trên:** `0x0000_00A0` và `0x0000_08A0` có `Index` đều bằng `10`, chỉ khác nhau ở bit thứ `[11]` (làm `Tag` của `0x08A0` bằng `1`, còn `Tag` của `0x00A0` bằng `0`). Vì vậy hai địa chỉ này nằm cùng `Set 10`!
 
 ---
 
-## 4. Xử lý Cache Miss, Chính sách Ghi (Write Policies) & Thay thế (LRU)
+## 4. Cấu Trúc Vật Lý Của Cache 4KB 2-Way & Tổng Số Bit SRAM
 
-### 4.1. Phân loại 3C của Cache Misses (The Three Cs)
-Mọi trường hợp Cache Miss đều thuộc một trong 3 nguyên nhân (3Cs):
-1. **Compulsory Miss (Cold Miss – Trượt bắt buộc/khởi tạo)**: Xảy ra khi một khối nhớ được truy cập **lần đầu tiên** trong chương trình (khi đó dòng Cache tương ứng đang có `Valid = 0`). Không thể tránh khỏi nếu không nạp trước (Prefetching) hoặc tăng kích thước dòng.
-2. **Capacity Miss (Trượt do dung lượng)**: Xảy ra khi tập làm việc (Working Set) của chương trình lớn hơn tổng dung lượng của Cache ($4\text{ KB}$), khiến các khối từng được nạp vào bị đẩy ra hết và sau đó được gọi lại (ví dụ: nhân hai ma trận lớn).
-3. **Conflict Miss (Collision Miss – Trượt do xung đột)**: Xảy ra trong Cache Direct-Mapped hoặc Set-Associative khi nhiều khối nhớ khác nhau cùng ánh xạ vào **cùng một Set** (vượt quá số Way $N$ của Set đó), dẫn đến việc đá nhau ra mặc dù các Set khác trong Cache vẫn còn trống.
+Nếu mở phần cứng Cache ra xem bên trong, ta có 128 hàng (tương ứng `Set 0` đến `Set 127`). Mỗi hàng chứa 2 Way và 1 bit LRU:
 
-### 4.2. Các Kỹ thuật Giảm Hình phạt khi Trượt (Reducing Miss Penalty – Mục 5.3, trang 392)
-Khi kích thước dòng Cache lớn (nhiều Word trên 1 dòng), để giảm thời gian CPU phải chờ:
-- **Early Restart (Khởi động lại sớm)**: Ngay khi Word mà CPU yêu cầu được đọc về tới nơi trong quá trình truyền chuỗi (burst transfer), Cache lập tức trả Word đó cho CPU tiếp tục chạy mà không cần đợi nạp xong toàn bộ các Word còn lại của dòng.
-- **Requested Word First / Critical Word First (Ưu tiên từ quan trọng trước)**: Bộ nhớ chính tổ chức gửi đúng Word mà CPU đang cần về trước tiên, sau đó mới truyền vòng quanh (wrap-around) các Word còn lại của dòng Cache.
-- *Lưu ý trong đồ án*: Giao diện giữa `cache_top` và `main_memory_model` sử dụng **Bus dữ liệu rộng 128-bit (`mem_rdata[127:0]`)** truyền song song toàn bộ dòng 16 Bytes trong một giao dịch burst, kết hợp mạch chọn kênh `sel_refill_data` đưa thẳng từ vừa nạp ra `cpu_rdata` ngay tại chu kỳ `STATE_REFILL_UPDATE`.
+```text
+         |----------------- Way 0 -----------------| |----------------- Way 1 -----------------|
+Set      | V | D |  Tag (21b) |   Data (128 bits)  | | V | D |  Tag (21b) |   Data (128 bits)  | | LRU(1b) |
+---------+---+---+------------+--------------------+ +---+---+------------+--------------------+ +---------+
+Set 0    | 1 | 1 |  0x00002   | W3 | W2 | W1 | W0  | | 1 | 0 |  0x00004   | W3 | W2 | W1 | W0  | |    0    |
+Set 1    | . | . |     ...    |        ...         | | . | . |     ...    |        ...         | |    .    |
+...      | . | . |     ...    |        ...         | | . | . |     ...    |        ...         | |    .    |
+Set 127  | 1 | 0 |  0x00000   | W3 | W2 | W1 | W0  | | 0 | 0 |  0x00000   |         0          | |    1    |
+```
 
-### 4.3. Chính sách Ghi (Write Policies)
-Xử lý thao tác Ghi (`cpu_we = 1`) phức tạp hơn thao tác Đọc rất nhiều vì phải đảm bảo **tính nhất quán dữ liệu (Data Consistency)** giữa Cache và DRAM, đồng thời tuyệt đối không được ghi đè dữ liệu vào SRAM trước khi kiểm tra xong Tag (nếu ghi mù như Direct-Mapped Write-Through sẽ làm hỏng dữ liệu của địa chỉ khác!).
+Ý nghĩa của các cột siêu dữ liệu (**Metadata**):
+- **`V` (Valid bit — 1 bit/line):** `0` nghĩa là dòng còn trống/rác (sau Reset); `1` nghĩa là dòng đã chứa dữ liệu hợp lệ.
+- **`D` (Dirty bit — 1 bit/line):** `0` (sạch) nghĩa là dữ liệu trong Cache giống hệt DRAM; `1` (bẩn) nghĩa là CPU đã ghi đè lên dòng này nên Cache đang giữ bản mới hơn DRAM.
+- **`Tag` (21 bits/line):** Định danh khối nhớ đang nằm ở Way đó. *(Không lưu 7 bit Index vì bản thân số hàng `0..127` chính là Index rồi!)*
+- **`LRU` (1 bit/set):** Ghi nhớ Way nào ít được dùng gần đây nhất để biết đường nào sẽ bị thay thế khi cả 2 Way đều đầy.
 
-#### A. Khi Ghi Trúng (Write Hit): Write-Through vs. Write-Back
-| Tiêu chí | Write-Through (Ghi xuyên) | Write-Back (Ghi trả sau – **Sử dụng trong Đồ án**) |
+**Tính tổng số bit SRAM vật lý cần thiết:**
+- Mỗi dòng (1 Way của 1 Set) tốn: $128\text{ (Data)} + 21\text{ (Tag)} + 1\text{ (Valid)} + 1\text{ (Dirty)} = 151\text{ bits}$.
+- Mỗi Set (gồm 2 Ways + 1 bit LRU) tốn: $2 \times 151 + 1 = 303\text{ bits}$.
+- Toàn bộ 128 Sets tốn:
+
+$$\text{Tổng bit SRAM} = 128 \times 303 = \mathbf{38,784\text{ bits}} \quad \Big(= 32,768\text{b Data} + 5,376\text{b Tag} + 256\text{b Valid} + 256\text{b Dirty} + 128\text{b LRU}\Big)$$
+
+---
+
+## 5. Phân Loại Cache Miss (3C), Chính Sách Ghi & Thuật Toán LRU
+
+### 5.1. Phân loại 3 nguyên nhân gây Cache Miss (3Cs)
+1. **Compulsory Miss (Cold Miss — Trượt bắt buộc):** Xảy ra khi khối nhớ được chạm tới **lần đầu tiên**, lúc dòng đó chưa từng được nạp (`Valid = 0`). Ví dụ: Kịch bản 1 (`0x1000`).
+2. **Capacity Miss (Trượt do dung lượng):** Tổng dữ liệu chương trình cần giữ cùng lúc vượt quá `4 KB`, khiến các dòng cũ bị đẩy ra rồi sau đó lại cần dùng lại.
+3. **Conflict Miss (Trượt do xung đột):** Nhiều khối nhớ khác Tag cùng ánh xạ vào một Set vượt quá số Way (`> 2` khối vào cùng `Set 0` hoặc `Set 10`), dù các Set khác vẫn còn trống. Ví dụ: Kịch bản 5, 6, 7.
+
+### 5.2. Chính sách ghi: Write-Back kết hợp Write-Allocate
+
+Khi CPU gửi lệnh ghi (`cpu_we = 1`), có 2 tình huống xảy ra:
+
+| Tình huống | Chính sách đồ án dùng | Cách hoạt động & Lý do thiết kế |
 | :--- | :--- | :--- |
-| **Nguyên lý** | Mọi lệnh ghi của CPU đều cập nhật **đồng thời** vào cả Cache và DRAM (hoặc đẩy vào hàng đợi *Write Buffer*). | Lệnh ghi chỉ cập nhật vào dòng trong Cache và bật cờ **`Dirty = 1`**. DRAM không bị truy cập. |
-| **Khi bị trục xuất (Eviction)** | Dòng trong Cache luôn giống hệt DRAM nên có thể ghi đè ngay lập tức, không cần ghi trả. | Nếu dòng nạn nhân có **`Dirty == 1`**, bộ điều khiển bắt buộc phải ghi trả (**Write-Back**) dòng 128-bit đó xuống DRAM trước khi nạp dòng mới đè lên. |
-| **Hiệu năng & Băng thông** | Tốn băng thông bus bộ nhớ; nếu Write Buffer đầy sẽ gây dừng CPU (Write Buffer Stall). | **Tốc độ ghi cực nhanh (1 chu kỳ)**; gom nhiều lần ghi trên cùng 1 dòng thành **1 lần ghi duy nhất** xuống DRAM khi bị thay thế, tiết kiệm tối đa băng thông bộ nhớ. |
+| **Write Hit** *(Đã có trong Cache)* | **Write-Back** | Chỉ ghi Word 32-bit mới vào Cache và bật `Dirty = 1` trong **1 chu kỳ**, **chưa ghi xuống DRAM**. Khi nào dòng bẩn này bị đuổi khỏi Cache mới ghi trả cả dòng 128-bit xuống DRAM (tiết kiệm băng thông DRAM nếu CPU ghi nhiều lần vào cùng 1 dòng). |
+| **Write Miss** *(Chưa có trong Cache)* | **Write-Allocate** | Vì 1 dòng có 4 Words mà CPU chỉ ghi 1 Word, Cache không thể chỉ ghi 1 Word rồi bật `Valid = 1` (vì 3 Word còn lại sẽ là rác). Do đó, Cache đọc cả dòng 128-bit từ DRAM lên, dùng mạch `merged_line` **trộn Word mới của CPU vào đúng vị trí**, nạp vào Cache và bật `Dirty = 1`. |
 
-#### B. Khi Ghi Trượt (Write Miss): Write-Allocate vs. No-Write-Allocate
-- **Write-Allocate (Fetch-on-Write – Sử dụng trong Đồ án)**: Khi lệnh ghi bị Miss, bộ điều khiển thực hiện giống như Read Miss (nếu dòng nạn nhân bẩn thì Write-Back trước), sau đó **nạp toàn bộ dòng 128-bit từ DRAM lên**, trộn (**merge**) từ 32-bit mới của CPU vào đúng vị trí `Word Offset`, ghi cả dòng vào Cache và đánh dấu **`Dirty = 1`**. Chính sách này kết hợp tự nhiên với **Write-Back** để khai thác tính cục bộ không gian/thời gian cho các truy cập tiếp theo vào cùng dòng đó.
-- **No-Write-Allocate (Write-Around)**: Chỉ ghi thẳng xuống DRAM mà không nạp dòng đó lên Cache (thường đi kèm với Write-Through).
+> **Lưu ý quan trọng về 2-Way Write-Back:** Khi Write Hit, bộ điều khiển phải chờ so sánh Tag xong (`hit == 1` và biết trúng `Way 0` hay `Way 1`) mới được phép bật `word_we0` hoặc `word_we1`. Nếu ghi trước khi kiểm tra Tag sẽ làm hỏng dữ liệu đang lưu ở Way còn lại.
 
-### 4.4. Chính sách Thay thế LRU (Least Recently Used) trong 2-Way Set-Associative Cache
-Khi xảy ra Cache Miss tại một Set `index`, bộ điều khiển phải chọn **1 trong 2 Way** (`Way 0` hoặc `Way 1`) làm **Đường nạn nhân (Victim Way)** để chứa dòng mới:
-1. **Quy tắc ưu tiên dòng trống (Invalid Line Priority)**:
-   - Nếu `Way 0` đang trống (`valid0 == 0`) $\to$ Chọn `victim_way = 0`.
-   - Ngược lại, nếu `Way 1` đang trống (`valid1 == 0`) $\to$ Chọn `victim_way = 1`.
-2. **Quy tắc LRU chính xác bằng 1-bit trạng thái (`lru_bit`)**:
-   - Khi cả 2 Way đều đã có dữ liệu hợp lệ (`valid0 == 1 && valid1 == 1`), mỗi Set chỉ cần duy trì **1 bit duy nhất** (`lru_mem[index]`):
-     - `lru_bit == 0`: `Way 0` là ít được dùng gần đây nhất (**LRU**), `Way 1` là vừa mới dùng gần đây nhất (**MRU**).
-     - `lru_bit == 1`: `Way 1` là **LRU**, `Way 0` là **MRU**.
-   - **Quy tắc cập nhật**: Bất cứ khi nào có một truy cập thành công (Hit hoặc vừa Refill xong) vào đường `access_way` ($\in \{0, 1\}$), đường còn lại sẽ trở thành LRU:
-     $$\text{lru\_mem}[\text{index}] \Leftarrow \sim\text{access\_way}$$
+### 5.3. Thuật toán thay thế True LRU (1-bit/Set)
+Trong [`rtl/lru_logic.v`](../rtl/lru_logic.v), mỗi Set dùng 1 bit `lru_mem[index]`:
+- **Quy ước:** `lru_bit = 0` $\to$ `Way 0` là nạn nhân (ít dùng gần đây nhất); `lru_bit = 1` $\to$ `Way 1` là nạn nhân.
+- **Thứ tự chọn đường nạp/thay thế (`victim_way`):**
+  1. Nếu `Way 0` đang trống (`valid0 == 0`) $\to$ chọn `Way 0`.
+  2. Ngược lại, nếu `Way 1` đang trống (`valid1 == 0`) $\to$ chọn `Way 1`.
+  3. Chỉ khi **cả 2 Way đều đầy (`valid0 == 1 && valid1 == 1`)** mới nhìn vào `lru_bit` để chọn nạn nhân.
+- **Quy tắc cập nhật:** Sau mỗi lần Hit hoặc Refill xong ở đường `access_way` (`0` hoặc `1`), đường vừa dùng trở thành mới nhất (MRU), nên đường **còn lại** trở thành LRU: `lru_mem[index] <= ~access_way`.
 
 ---
 
-## 5. Đo lường và Cải thiện Hiệu năng Cache (Mục 5.4)
+## 6. Đánh Giá Hiệu Năng Qua AMAT & Đối Chiếu Số Liệu Thực Tế
 
-### 5.1. Phương trình Thời gian Thực thi CPU có Chu kỳ Chờ Bộ nhớ (CPU Time with Memory Stalls)
-Theo Mục 5.4 (trang 399–401 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)), thời gian thực thi của CPU được tính bởi:
-$$\text{CPU Time} = \left(\text{CPU Execution Clock Cycles} + \text{Memory-Stall Clock Cycles}\right) \times \text{Clock Cycle Time}$$
+Để không chỉ nhìn riêng tỷ lệ Hit/Miss mà đánh giá tổng thể cả tốc độ khi Hit lẫn chi phí khi Miss, ta dùng **AMAT (Average Memory Access Time — Thời gian truy cập bộ nhớ trung bình)**:
 
-Trong đó:
-$$\text{Memory-Stall Clock Cycles} = \text{Read-Stall Cycles} + \text{Write-Stall Cycles}$$
-Nếu tính theo số lệnh chương trình ($I = \text{Instruction Count}$):
-$$\text{Memory-Stall Clock Cycles} = I \times \frac{\text{Misses}}{\text{Instruction}} \times \text{Miss Penalty}$$
-Và số chu kỳ trung bình trên mỗi lệnh thực tế ($\text{CPI}_{\text{stall}}$) là:
-$$\text{CPI}_{\text{stall}} = \text{CPI}_{\text{base}} + \text{Memory-Stall Cycles per Instruction}$$
+$$\text{AMAT} = \text{Hit Time} + \text{Miss Rate} \times \text{Miss Penalty}$$
 
-> [!IMPORTANT]
-> **Hệ quả của Định luật Amdahl (Trang 401 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf))**: Khi cải tiến đường ống (Pipeline) làm giảm $\text{CPI}_{\text{base}}$ (ví dụ từ $2.0$ xuống $1.0$) hoặc tăng tần số xung nhịp CPU mà không cải thiện tốc độ hệ thống bộ nhớ, **tỷ trọng thời gian CPU bị đình trệ vì Cache Miss ($\text{Memory Stall} / \text{Total CPI}$) sẽ tăng vọt** (ví dụ từ $63\%$ lên $77\%$). Do đó, thiết kế Cache quyết định trực tiếp hiệu năng thực tế của vi xử lý!
+Vì đồ án dùng **Write-Back**, Miss được chia làm 2 loại với chi phí khác nhau:
+- **Hit:** `1` chu kỳ (`0` chu kỳ stall).
+- **Clean Miss** *(nạn nhân trống hoặc `Dirty = 0`)*: `10` chu kỳ (`9` chu kỳ stall).
+- **Dirty Miss** *(nạn nhân `Valid = 1` và `Dirty = 1`)*: `18` chu kỳ (`17` chu kỳ stall).
 
-### 5.2. Thời gian Truy cập Bộ nhớ Trung bình (AMAT – Average Memory Access Time)
-Để đánh giá toàn diện một thiết kế Cache (xét cả Hit Time, Miss Rate và Miss Penalty), các nhà thiết kế sử dụng đại lượng **AMAT** (Trang 402 [`5.3-5.4.pdf`](file:///b:/KTMT/project_KTMT/5.3-5.4.pdf)):
-$$\text{AMAT} = \text{Time for a Hit} + \text{Miss Rate} \times \text{Miss Penalty}$$
+Do đó công thức tính AMAT chính xác cho toàn bộ chuỗi truy cập là:
 
-Đối với kiến trúc **Write-Back Cache** như trong đồ án, một lần Miss có thể là **Clean Miss** (nạn nhân sạch, chỉ tốn thời gian Fetch $\text{Penalty}_{\text{clean}}$) hoặc **Dirty Miss** (nạn nhân bẩn, tốn thêm thời gian Write-Back $\text{Penalty}_{\text{wb}}$). Khi đó công thức AMAT tổng quát chính xác là:
-$$\text{AMAT} = \text{Hit Time} + \text{Miss Rate} \times \text{Penalty}_{\text{clean}} + \left(\text{Miss Rate} \times P_{\text{dirty\_victim}}\right) \times \text{Penalty}_{\text{wb}}$$
+$$\text{AMAT} = \frac{N_{\text{hit}} \times 1 + N_{\text{clean\_miss}} \times 10 + N_{\text{dirty\_miss}} \times 18}{N_{\text{total}}}$$
 
-**Áp dụng thực tế vào kết quả mô phỏng của Đồ án (`tb_cache_top.v`)**:
-- $\text{Hit Time} = 1\text{ chu kỳ}$.
-- $\text{Penalty}_{\text{clean}} = 9\text{ chu kỳ stall}$ (tổng thời gian Clean Miss = $1 + 9 = 10\text{ chu kỳ}$).
-- $\text{Penalty}_{\text{wb}} = 8\text{ chu kỳ stall}$ (tổng thời gian Dirty Miss = $1 + 9 + 8 = 18\text{ chu kỳ}$).
-- Với $26$ lần truy cập, có $15$ Hits, $11$ Misses (trong đó có $2$ lần Dirty Write-Back):
-  $$\text{AMAT} = 1 + \frac{11}{26} \times 9 + \frac{2}{26} \times 8 = 1 + \frac{99 + 16}{26} = \frac{141}{26} \approx \mathbf{5.42\text{ chu kỳ}} \quad (54.23\text{ ns tại } 100\text{ MHz})$$
-
-
+**Áp dụng trực tiếp vào kết quả chạy [`sim/tb_cache_top.v`](../sim/tb_cache_top.v):**
+- Tổng số truy cập: $N_{\text{total}} = 26$ (gồm `15` Hits, `9` Clean Misses, `2` Dirty Misses).
+- Tổng chu kỳ: $(15 \times 1) + (9 \times 10) + (2 \times 18) = 15 + 90 + 36 = \mathbf{141\text{ chu kỳ}}$.
+- Tổng chu kỳ CPU bị dừng chờ (Stall): $141 - 26 = \mathbf{115\text{ chu kỳ}}$ (tức `9 × 9 + 2 × 17 = 115`).
+- **AMAT đo được:** $\dfrac{141}{26} \approx \mathbf{5.42\text{ chu kỳ}}$ (với chu kỳ `10 ns` tại `100 MHz` $\implies \mathbf{54.23\text{ ns}}$).

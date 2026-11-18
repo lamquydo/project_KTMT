@@ -1,28 +1,14 @@
-// =============================================================================
-// File: tb_cache_top.v
-// Description: Comprehensive Self-Checking Testbench for 4KB 2-Way Set-Associative Cache
-// Scenarios Tested:
-//   1. Cold Miss (Compulsory Miss) & Clean Refill Latency (10 cycles)
-//   2. Read Hit (Single-cycle latency & Spatial locality across all 4 words in block)
-//   3. Write Hit (Write-Back Policy: 1-cycle update, Dirty bit assertion, DRAM unchanged)
-//   4. Write Miss (Write-Allocate: fetch line, merge word, set Dirty, 10 cycles)
-//   5. Conflict Miss & LRU Replacement & Dirty Line Write-Back to DRAM (18 cycles)
-//   6. Conflict Miss with Clean Victim Eviction (No Write-Back needed, 10 cycles)
-//   7. Textbook Section 5.4 Benchmark: 2-Way Associativity & LRU Sequence Verification
-//   8. Multi-Set Boundary Test (Set 63, Set 127) & Quantitative AMAT/Stall Report
-// Course: Computer Architecture (Kien Truc May Tinh)
-// =============================================================================
+// tb_cache_top.v - Testbench tự kiểm tra 8 kịch bản cho Cache 4KB 2-Way
 
 `timescale 1ns / 1ps
 `include "../rtl/cache_defines.vh"
 
 module tb_cache_top;
 
-    // Clock and Reset Signals
     reg clk;
     reg rst_n;
 
-    // CPU Bus Interface Signals
+    // Giao diện CPU
     reg                      cpu_req;
     reg                      cpu_we;
     reg  [`ADDR_WIDTH-1:0]   cpu_addr;
@@ -30,7 +16,7 @@ module tb_cache_top;
     wire [`DATA_WIDTH-1:0]   cpu_rdata;
     wire                     cpu_ready;
 
-    // Main Memory Interface Signals
+    // Giao diện DRAM
     wire                     mem_req;
     wire                     mem_we;
     wire [`ADDR_WIDTH-1:0]   mem_addr;
@@ -38,12 +24,12 @@ module tb_cache_top;
     wire [`LINE_WIDTH-1:0]   mem_rdata;
     wire                     mem_ready;
 
-    // Telemetry / Status Signals
+    // Tín hiệu giám sát
     wire                     hit_out;
     wire                     miss_out;
     wire [2:0]               state_out;
 
-    // Verification & Architectural Performance Metrics
+    // Biến thống kê hiệu năng
     integer total_accesses;
     integer hit_count;
     integer miss_count;
@@ -54,10 +40,9 @@ module tb_cache_top;
     integer stall_cycles;
     integer test_errors;
 
-    // Clock Generation: 100MHz (Period = 10ns)
+    // Tạo xung clock 100MHz (chu kỳ 10ns)
     always #5 clk = ~clk;
 
-    // Instantiate Device Under Test (DUT)
     cache_top u_dut (
         .clk       (clk),
         .rst_n     (rst_n),
@@ -78,7 +63,6 @@ module tb_cache_top;
         .state_out (state_out)
     );
 
-    // Instantiate Main Memory Model (DRAM) with 6-cycle latency
     main_memory_model #(
         .LATENCY_CYCLES(6)
     ) u_main_memory (
@@ -92,7 +76,7 @@ module tb_cache_top;
         .mem_ready (mem_ready)
     );
 
-    // Track Hit / Miss / Write-Back counters synchronously
+    // Đếm số lần Hit, Miss và Write-Back
     always @(posedge clk) begin
         if (rst_n) begin
             if (hit_out)  hit_count  <= hit_count + 1;
@@ -101,9 +85,7 @@ module tb_cache_top;
         end
     end
 
-    // -------------------------------------------------------------------------
-    // CPU Transaction Tasks
-    // -------------------------------------------------------------------------
+    // Task giả lập CPU đọc 1 Word và tự động kiểm tra dữ liệu trả về
     task cpu_read(
         input  [`ADDR_WIDTH-1:0] addr,
         input  [`DATA_WIDTH-1:0] exp_data,
@@ -146,6 +128,7 @@ module tb_cache_top;
         end
     endtask
 
+    // Task giả lập CPU ghi 1 Word và đếm số chu kỳ thực hiện
     task cpu_write(
         input  [`ADDR_WIDTH-1:0] addr,
         input  [`DATA_WIDTH-1:0] wdata,
@@ -179,9 +162,6 @@ module tb_cache_top;
         end
     endtask
 
-    // -------------------------------------------------------------------------
-    // Main Test Stimulus
-    // -------------------------------------------------------------------------
     reg [`DATA_WIDTH-1:0] read_val;
     integer latency;
     real hit_rate;
@@ -190,11 +170,10 @@ module tb_cache_top;
     real amat_ns;
 
     initial begin
-        // Waveform Dump Setup
+        // Xuất file VCD để xem waveform trên GTKWave
         $dumpfile("cache_sim.vcd");
         $dumpvars(0, tb_cache_top);
 
-        // Initialization
         clk            = 0;
         rst_n          = 0;
         cpu_req        = 0;
@@ -216,19 +195,15 @@ module tb_cache_top;
         $display("   Specifications: 32-bit Addr | 16-Byte Line | Write-Back | Write-Allocate | LRU");
         $display("================================================================================");
 
-        // Apply Reset
         #25;
         rst_n = 1;
         #20;
 
-        // ---------------------------------------------------------------------
-        // TEST SCENARIO 1: Cold Miss (Compulsory Miss)
-        // ---------------------------------------------------------------------
+        // Kịch bản 1: Cold Miss (đọc lần đầu khi Cache trống -> 10 chu kỳ)
         $display("\n--------------------------------------------------------------------------------");
         $display(">>> TEST SCENARIO 1: Cold Miss (Compulsory Miss)");
         $display("    Reading address 0x0000_1000 for the very first time (Empty Cache)");
         $display("--------------------------------------------------------------------------------");
-        // Address 0x0000_1000: Tag = 0x00002, Index = Set 0, Offset = 0x0 (Word 0)
         cpu_read(32'h0000_1000, 32'h1000_1000, read_val, latency);
         if (latency == 10) 
             $display("    => Cold miss confirmed: CPU stalled for %0d cycles while fetching DRAM line.", latency);
@@ -237,14 +212,11 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // ---------------------------------------------------------------------
-        // TEST SCENARIO 2: Read Hit & Spatial Locality
-        // ---------------------------------------------------------------------
+        // Kịch bản 2: Read Hit & Spatial Locality (đọc lại 4 Word trong cùng line -> 1 chu kỳ/lần)
         $display("\n--------------------------------------------------------------------------------");
         $display(">>> TEST SCENARIO 2: Read Hit & Spatial Locality");
         $display("    Reading the same line again (Word 0, 1, 2, 3) - Expect single-cycle HIT");
         $display("--------------------------------------------------------------------------------");
-        // Re-read Word 0 (Temporal Locality)
         cpu_read(32'h0000_1000, 32'h1000_1000, read_val, latency);
         if (latency == 1)
             $display("    => Temporal Read Hit Verified! Returned in exactly 1 cycle.");
@@ -253,16 +225,13 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // Read Word 1, 2, 3 (Spatial Locality within the same 16-byte line)
         cpu_read(32'h0000_1004, 32'h1000_1004, read_val, latency);
         if (latency == 1)
             $display("    => Spatial Read Hit (Word 1..3) Verified! Returned in 1 cycle each.");
         cpu_read(32'h0000_1008, 32'h1000_1008, read_val, latency);
         cpu_read(32'h0000_100C, 32'h1000_100C, read_val, latency);
 
-        // ---------------------------------------------------------------------
-        // TEST SCENARIO 3: Write Hit (Write-Back Policy)
-        // ---------------------------------------------------------------------
+        // Kịch bản 3: Write Hit (Write-Back: ghi vào Cache, DRAM chưa thay đổi)
         $display("\n--------------------------------------------------------------------------------");
         $display(">>> TEST SCENARIO 3: Write Hit (Write-Back Policy)");
         $display("    Writing 0xCAFEBABE to 0x0000_1000 (Already resident in Set 0, Way 0)");
@@ -275,7 +244,6 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // Verify DRAM is NOT yet updated (proving Write-Back instead of Write-Through)
         if (u_main_memory.mem_storage[32'h0000_1000 >> 4][31:0] === 32'h1000_1000) begin
             $display("    => [PASS] WRITE-BACK ISOLATION VERIFIED: DRAM still holds old value 0x10001000.");
         end else begin
@@ -283,12 +251,9 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // Read back to verify updated value in cache
         cpu_read(32'h0000_1000, 32'hCAFE_BABE, read_val, latency);
 
-        // ---------------------------------------------------------------------
-        // TEST SCENARIO 4: Write Miss (Write-Allocate Policy)
-        // ---------------------------------------------------------------------
+        // Kịch bản 4: Write Miss (Write-Allocate: nạp vào Way 1 trống, trộn Word mới)
         $display("\n--------------------------------------------------------------------------------");
         $display(">>> TEST SCENARIO 4: Write Miss (Write-Allocate Policy)");
         $display("    Writing 0xDEADBEEF to 0x0000_2000 (Set 0, Tag 0x0004 - Way 1 is empty)");
@@ -301,13 +266,10 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // Read back from 0x0000_2000 (Word 0) and 0x0000_2004 (Word 1)
         cpu_read(32'h0000_2000, 32'hDEAD_BEEF, read_val, latency);
         cpu_read(32'h0000_2004, 32'h1000_2004, read_val, latency);
 
-        // ---------------------------------------------------------------------
-        // TEST SCENARIO 5: Conflict Miss, LRU Replacement & Dirty Line Write-Back
-        // ---------------------------------------------------------------------
+        // Kịch bản 5: Conflict Miss, thay thế LRU và ghi trả dòng bẩn về DRAM (18 chu kỳ)
         $display("\n--------------------------------------------------------------------------------");
         $display(">>> TEST SCENARIO 5: Conflict Miss, LRU Eviction & Dirty Write-Back");
         $display("    Set 0 is now FULL: Way 0 (0x1000, Dirty), Way 1 (0x2000, Dirty)");
@@ -322,7 +284,6 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // Verify DRAM consistency for evicted Way 0 (0x0000_1000):
         if (u_main_memory.mem_storage[32'h0000_1000 >> 4][31:0] === 32'hCAFE_BABE) begin
             $display("    => [PASS] DRAM WRITE-BACK #1 VERIFIED: DRAM[0x1000] now contains 0x%08h!", 32'hCAFE_BABE);
         end else begin
@@ -331,8 +292,6 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // Re-read evicted address 0x0000_1000:
-        // Evicts Way 1 (0x0000_2000, which is ALSO Dirty with 0xDEAD_BEEF!)
         $display("\n    Re-reading evicted address 0x0000_1000 from DRAM (evicts Dirty Way 1 @ 0x2000)...");
         cpu_read(32'h0000_1000, 32'hCAFE_BABE, read_val, latency);
         if (latency == 18) begin
@@ -342,7 +301,6 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // Verify DRAM consistency for evicted Way 1 (0x0000_2000):
         if (u_main_memory.mem_storage[32'h0000_2000 >> 4][31:0] === 32'hDEAD_BEEF) begin
             $display("    => [PASS] DRAM WRITE-BACK #2 VERIFIED: DRAM[0x2000] now contains 0x%08h!", 32'hDEAD_BEEF);
         end else begin
@@ -351,9 +309,7 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // ---------------------------------------------------------------------
-        // TEST SCENARIO 6: Conflict Miss with CLEAN Victim Eviction
-        // ---------------------------------------------------------------------
+        // Kịch bản 6: Conflict Miss nhưng nạn nhân sạch -> bỏ qua Write-Back (10 chu kỳ)
         $display("\n--------------------------------------------------------------------------------");
         $display(">>> TEST SCENARIO 6: Conflict Miss with CLEAN Victim Eviction");
         $display("    Set 0 currently holds: Way 0 (0x3000, CLEAN, LRU), Way 1 (0x1000, CLEAN, MRU)");
@@ -367,19 +323,14 @@ module tb_cache_top;
             test_errors = test_errors + 1;
         end
 
-        // ---------------------------------------------------------------------
-        // TEST SCENARIO 7: Textbook Section 5.4 Benchmark (2-Way vs Direct-Mapped)
-        // ---------------------------------------------------------------------
+        // Kịch bản 7: Chuỗi A -> B -> A -> C -> B trên Set 10 kiểm chứng 2-Way LRU
         $display("\n--------------------------------------------------------------------------------");
         $display(">>> TEST SCENARIO 7: Textbook Section 5.4 Associativity Benchmark (Set 10)");
         $display("    Reference sequence to Set 10 (0x00A0): Block A -> Block B -> Block A -> Block C -> Block B");
         $display("    In Direct-Mapped: 5 Misses (0 Hits). In 2-Way Set-Associative (LRU): 4 Misses, 1 Hit!");
         $display("--------------------------------------------------------------------------------");
-        // Block A = 0x0000_00A0 (Tag 0, Set 10) -> Miss (Way 0)
         cpu_read(32'h0000_00A0, 32'h1000_00A0, read_val, latency);
-        // Block B = 0x0000_08A0 (Tag 1, Set 10) -> Miss (Way 1)
         cpu_read(32'h0000_08A0, 32'h1000_08A0, read_val, latency);
-        // Block A = 0x0000_00A0 (Tag 0, Set 10) -> HIT! (Way 0 becomes MRU, Way 1 becomes LRU)
         cpu_read(32'h0000_00A0, 32'h1000_00A0, read_val, latency);
         if (latency == 1)
             $display("    => [PASS] 2-Way Associativity prevented ping-pong conflict! Block A HIT in 1 cycle.");
@@ -387,38 +338,30 @@ module tb_cache_top;
             $display("    => [ERROR] Block A should HIT in 2-Way Set-Associative cache!");
             test_errors = test_errors + 1;
         end
-        // Block C = 0x0000_10A0 (Tag 2, Set 10) -> Miss (Evicts LRU Block B in Way 1)
         cpu_read(32'h0000_10A0, 32'h1000_10A0, read_val, latency);
-        // Block B = 0x0000_08A0 (Tag 1, Set 10) -> Miss (Evicts LRU Block A in Way 0)
         cpu_read(32'h0000_08A0, 32'h1000_08A0, read_val, latency);
 
-        // ---------------------------------------------------------------------
-        // TEST SCENARIO 8: Multi-Set Boundary Test (Set 63 & Set 127)
-        // ---------------------------------------------------------------------
+        // Kịch bản 8: Kiểm tra biên Set 63 và Set 127
         $display("\n--------------------------------------------------------------------------------");
         $display(">>> TEST SCENARIO 8: Multi-Set Boundary Verification (Set 63 & Set 127)");
         $display("    Testing mid-range Set 63 (0x03F0) and max boundary Set 127 (0x07F0)");
         $display("--------------------------------------------------------------------------------");
-        // Set 63 (0x0000_03F0): Cold Miss followed by 3 Spatial Hits
         cpu_read(32'h0000_03F0, 32'h1000_03F0, read_val, latency);
         cpu_read(32'h0000_03F4, 32'h1000_03F4, read_val, latency);
         cpu_read(32'h0000_03F8, 32'h1000_03F8, read_val, latency);
         cpu_read(32'h0000_03FC, 32'h1000_03FC, read_val, latency);
 
-        // Set 127 (0x0000_07F0): Cold Miss followed by 3 Spatial Hits
         cpu_read(32'h0000_07F0, 32'h1000_07F0, read_val, latency);
         cpu_read(32'h0000_07F4, 32'h1000_07F4, read_val, latency);
         cpu_read(32'h0000_07F8, 32'h1000_07F8, read_val, latency);
         cpu_read(32'h0000_07FC, 32'h1000_07FC, read_val, latency);
 
-        // ---------------------------------------------------------------------
-        // Quantitative Performance Report & Statistics Summary (Section 5.4)
-        // ---------------------------------------------------------------------
+        // Tính toán và in báo cáo hiệu năng (Hit Rate, Miss Rate, AMAT)
         #50;
         hit_rate    = (hit_count * 100.0) / total_accesses;
         miss_rate   = (miss_count * 100.0) / total_accesses;
         amat_cycles = (total_cycles * 1.0) / total_accesses;
-        amat_ns     = amat_cycles * 10.0; // 100MHz clock -> 10ns period
+        amat_ns     = amat_cycles * 10.0;
 
         $display("\n================================================================================");
         $display("             QUANTITATIVE ARCHITECTURAL PERFORMANCE SUMMARY                     ");
